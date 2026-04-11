@@ -6,7 +6,7 @@ uCnux is a toy oprating system for extremely resource constrained microcontrolle
 ## Dependencies
 
 - GNU Make
-- cross compilation toolchain (for ARM this is risc64-unkown-elf)
+- cross compilation toolchain (for ARM this is arm-none-eabi)
 
 ## Building
 
