@@ -19,7 +19,7 @@ ifeq ($(CONFIG_BOARD_MCXA153), y)
 ARCH = armv8-m
 BOARD = mcxa153
 TOOLCHAIN = ~/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi
-ARCH_CFLAGS = -mcpu=cortex-m33 -mthumb -std=gnu11 -DCPU_MCXA153VFM
+ARCH_CFLAGS = -march=armv8-m.main -mthumb -std=gnu11 -DCPU_MCXA153VFM
 ARCH_LDFLAGS =
 $(shell echo "#define ARCH_MCXA153" >> $(SETTINGS_FILE))
 endif
@@ -40,17 +40,17 @@ $(shell echo "#define TTY_DRIVER" >> $(SETTINGS_FILE))
 endif
 
 ifeq ($(CONFIG_USART_DRIVER), y)
-DEV_SELECT += drivers/USART/usart.c
+DEV_SELECT += drivers/usart/usart.c
 $(shell echo "#define USART_DRIVER" >> $(SETTINGS_FILE))
 endif
 
 ifeq ($(CONFIG_USART_DRIVER_MCXA), y)
-DEV_SELECT += drivers/USART/mcxa153_lpuart.c
+DEV_SELECT += drivers/usart/mcxa.c
 $(shell echo "#define USART_DRIVER_MCXA" >> $(SETTINGS_FILE))
 endif
 
 ifeq ($(CONFIG_ST7920_DRIVER), y)
-DEV_SELECT += drivers/ST7920/ST7920.c
+DEV_SELECT += drivers/st7920/st7920.c
 $(shell echo "#define ST7920_DRIVER" >> $(SETTINGS_FILE))
 endif
 
@@ -119,6 +119,10 @@ $(MN_FILE): $(OBJS)
 
 image: $(MN_FILE)
 	$(OBJCOPY) -O binary $(MN_FILE) image.bin
+
+dump:
+	$(TOOLCHAIN)-objdump -d -M no-aliases $(MN_FILE) >> dump.s.dump
+	$(TOOLCHAIN)-objdump -S -d -M no-aliases $(MN_FILE) >> verbose_dump.s.dump
 
 clean:
 	rm -r $(BUILD)

@@ -4,3 +4,5 @@ build
 *.bin
 *.json
 *.vs
+*.dump
+*.dump.old

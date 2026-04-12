@@ -1,5 +1,5 @@
 #include <kernel/interrupt.h>
-#include <kernel/fault.h>
+#include <arch/armv8-m/fault.h>
 #include <board/board.h>
 #include <lib/stdlib.h>
 #include <stddef.h>
@@ -12,8 +12,12 @@ void* interrupt_registry[VECTOR_TABLE_SIZE];
 void interrupt_init()
 {
     memcpy(vector_table, __Vectors, 16*4); //copy the core interrupts to the new table
-    //memset(vector_table, 0, sizeof(vector_table));
     memset(interrupt_registry, 0, sizeof(interrupt_registry));
+    vector_table[2] = (uint32_t) &nmi_handler;
+    vector_table[3] = (uint32_t) &hardfault_handler;
+    vector_table[4] = (uint32_t) &mpufault_handler;
+    vector_table[5] = (uint32_t) &busfault_handler;
+    vector_table[6] = (uint32_t) &usagefault_handler;
     __DSB();
 
     SCB->VTOR = (uint32_t) &vector_table;

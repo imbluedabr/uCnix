@@ -4,3 +4,5 @@
 #define INIT_CONSOLE_DEVNO 
 #define BOARD_TYPE mcxa153
 #define ARCH_MCXA153
+#define USART_DRIVER
+#define USART_DRIVER_MCXA

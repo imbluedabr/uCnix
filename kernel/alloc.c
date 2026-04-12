@@ -1,18 +1,20 @@
 #include <kernel/alloc.h>
+#include <lib/stdlib.h>
 #include <stddef.h>
 
 static char* block_base;
-struct block block_array[BLOCK_ARRAY_LEN];
+[[gnu::aligned(8)]] static struct block block_array[BLOCK_ARRAY_LEN];
 
-uint8_t unused_blocks[BLOCK_ARRAY_LEN];
-uint8_t unused_blocks_top;
+static uint8_t unused_blocks[BLOCK_ARRAY_LEN];
+static uint8_t unused_blocks_top;
 
 struct block* get_block()
 {
     if (unused_blocks_top == 0) {
         return NULL;
     }
-    return &block_array[unused_blocks[--unused_blocks_top]];
+    uint8_t idx = unused_blocks[--unused_blocks_top];
+    return &block_array[idx];
 }
 
 int get_block_idx(struct block* b)
@@ -50,11 +52,12 @@ void* kmalloc(int size)
     char* base = block_base;
     do {
         if (current->size > size && !current->occupied) {
+            
             struct block* new = get_block();
             if (new == NULL) {
                 return NULL;
             }
-
+            /*
             new->prev = get_block_idx(current);
             new->next = current->next;
             if (current->next != BLOCK_NIL) {
@@ -65,7 +68,7 @@ void* kmalloc(int size)
             new->size = current->size - size;
             current->size = size;
             current->occupied = true;
-            current->next = get_block_idx(new);
+            current->next = get_block_idx(new);*/
             return base;
         }
         if (current->size == size && !current->occupied) {
@@ -78,6 +81,13 @@ void* kmalloc(int size)
         base += current->size;
         current = get_block_addr(current->next);
     } while(1);
+}
+
+void* kzalloc(int size)
+{
+    char* mem = kmalloc(size);
+    memset(mem, 0, size);
+    return mem;
 }
 
 void try_coalesce(struct block* b)
