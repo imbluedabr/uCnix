@@ -2,6 +2,6 @@
 
 #define TTY_MAJOR 0
 #define USART_MAJOR 1
-#define ST7920_MAJOR 2
+#define HD44XXX_MAJOR 2
 
 

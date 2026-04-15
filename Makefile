@@ -21,7 +21,7 @@ BOARD = mcxa153
 TOOLCHAIN = arm-none-eabi
 ARCH_CFLAGS = -mcpu=cortex-m33 -mthumb -std=gnu11 -DCPU_MCXA153VFM
 ARCH_LDFLAGS =
-$(shell echo "#define ARCH_MCXA153" >> $(SETTINGS_FILE))
+$(shell echo "#define BOARD_MCXA153" >> $(SETTINGS_FILE))
 endif
 
 # the filesystems
@@ -39,20 +39,32 @@ DEV_SELECT += drivers/tty/tty.c
 $(shell echo "#define TTY_DRIVER" >> $(SETTINGS_FILE))
 endif
 
+
 ifeq ($(CONFIG_USART_DRIVER), y)
 DEV_SELECT += drivers/usart/usart.c
 $(shell echo "#define USART_DRIVER" >> $(SETTINGS_FILE))
 endif
-
 ifeq ($(CONFIG_USART_DRIVER_MCXA), y)
 DEV_SELECT += drivers/usart/mcxa.c
 $(shell echo "#define USART_DRIVER_MCXA" >> $(SETTINGS_FILE))
 endif
 
-ifeq ($(CONFIG_ST7920_DRIVER), y)
-DEV_SELECT += drivers/st7920/st7920.c
-$(shell echo "#define ST7920_DRIVER" >> $(SETTINGS_FILE))
+
+ifeq ($(CONFIG_HD44XXX_DRIVER), y)
+DEV_SELECT += drivers/hd44xxx/hd44xxx.c
+$(shell echo "#define HD44XXX_DRIVER" >> $(SETTINGS_FILE))
 endif
+ifeq ($(CONFIG_HD44XXX_DRIVER_HD44780), y)
+DEV_SELECT += drivers/hd44xxx/hd44780.c
+$(shell echo "#define HD44XXX_DRIVER_HD44780" >> $(SETTINGS_FILE))
+endif
+ifeq ($(CONFIG_HD44XXX_DRIVER_ST7920), y)
+DEV_SELECT += drivers/hd44xxx/st7920.c
+$(shell echo "#define HD44XXX_DRIVER_ST7920" >> $(SETTINGS_FILE))
+endif
+
+
+
 
 
 #source files

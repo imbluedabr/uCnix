@@ -39,4 +39,10 @@ usagefault_handler:
     bkpt
 
 
+    .thumb_func
+    .align 2
+    .globl   debugevent_handler
+    .type    debugevent_handler, %function
+debugevent_handler:
+    bx lr
 

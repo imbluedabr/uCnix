@@ -5,8 +5,6 @@
     .section .boot_vtable, "a"
     .align 2
     .globl __Vectors
-    .extern systick_handler
-    .extern lpuart_handler
 __Vectors:
     .long   __stack_top                                      /* Top of Stack */
     .long   reset_handler                                   /* Reset Handler */
@@ -23,7 +21,7 @@ __Vectors:
     .long   0                                /* Debug Monitor Handler*/
     .long   0                                               /* Reserved*/
     .long   0                                  /* PendSV Handler*/
-    .long   systick_handler                                 /* SysTick Handler*/
+    .long   0                                 /* SysTick Handler*/
     
     .size   __Vectors, . - __Vectors
 
