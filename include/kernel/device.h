@@ -1,6 +1,7 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+#include <kernel/proc.h>
 
 typedef uint8_t dev_t;
 
@@ -14,9 +15,11 @@ typedef uint8_t dev_t;
 struct io_request {
     void* buffer;
     uint32_t offset : 24;
-    uint8_t op : 8; //operation: read = 0, write = 1
-    uint32_t count : 24;
-    uint8_t status : 8; //status: pending = 0, done = 1
+    uint8_t op      : 1; //op: read = 0, write = 1
+    uint8_t status  : 1; //status: pending = 0, done = 1
+    uint8_t res0    : 6; //reserved
+    uint32_t count  : 24;
+    pid_t waiter    : 8; //process waiting for this to complete
     struct io_request* next_free; //this is used to keep a free list of io_request objects to speed up allocation
 };
 

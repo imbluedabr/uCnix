@@ -1,8 +1,10 @@
 #include <kernel/proc.h>
 #include <kernel/interrupt.h>
 #include <kernel/time.h>
+#include <kernel/device.h>
 #include <lib/stdlib.h>
 #include <arch/armv8-m/proc.h>
+#include <arch/armv8-m/syscall.h>
 #include <stddef.h>
 
 struct proc proc_table[PROC_TABLE_LEN];
@@ -15,15 +17,14 @@ uint8_t proc_run_queue_tail;
 uint8_t proc_run_queue_count;
 
 struct proc* current_process;
-volatile uint32_t proc_ticks;
-
+bool proc_sched_started;
 
 int proc_enqueue(struct proc* process)
 {
     if (proc_run_queue_count == PROC_TABLE_LEN) return -1;
     
-    proc_run_queue[proc_run_queue_tail] = process;
-    proc_run_queue_tail = (proc_run_queue_tail + 1) & (PROC_TABLE_LEN - 1);
+    proc_run_queue[proc_run_queue_head] = process;
+    proc_run_queue_head = (proc_run_queue_head + 1) & (PROC_TABLE_LEN - 1);
     proc_run_queue_count++;
     
     return 0;
@@ -33,8 +34,8 @@ struct proc* proc_dequeue()
 {
     if (proc_run_queue_count == 0) return NULL;
     
-    struct proc* process = proc_run_queue[proc_run_queue_head];
-    proc_run_queue_head = (proc_run_queue_head + 1) & (PROC_TABLE_LEN - 1);
+    struct proc* process = proc_run_queue[proc_run_queue_tail];
+    proc_run_queue_tail = (proc_run_queue_tail + 1) & (PROC_TABLE_LEN - 1);
     proc_run_queue_count--;
     
     return process;
@@ -51,58 +52,89 @@ void proc_init()
     proc_run_queue_head = 0;
     proc_run_queue_tail = 0;
     proc_run_queue_count = 0;
+    current_process = NULL;
+    proc_sched_started = false;
 
     __disable_irq();
-    proc_ticks = 0;
     
-    register_interrupt(SysTick_IRQn, NULL, proc_systick_handler);
     register_interrupt(PendSV_IRQn, NULL, pendsv_handler);
+
+    NVIC_SetPriority(PendSV_IRQn, 7);
+
     __enable_irq();
 }
 
-struct proc* proc_create(uint8_t* stack, uint32_t stack_size, void (*entry_point)())
+struct proc* proc_create(uint8_t* ustack, uint8_t* kstack, uint32_t stack_size, void (*entry_point)())
 {
-    struct proc* p = &proc_table[proc_free_list[--proc_free_list_top]];
-    p->psp = stack + stack_size; //the stack grows downwards so we must put the top of the array into psp
-    p->splim = stack; //the limit of the stack is the base of the stack memory
-    p->entry_point = (uint32_t) entry_point;
-    p->control = CONTROL_SPSEL_Msk;
+    pid_t pid = proc_free_list[--proc_free_list_top];
+    struct proc* p = &proc_table[pid];
+    p->state = PROC_READY;
+    p->pid = pid;
+    //user mode thread
+    p->psp = ustack + stack_size; //the stack grows downwards so we must put the top of the array into psp
+    p->splim = ustack; //the limit of the stack is the base of the stack memory
+    p->control.w = CONTROL_SPSEL_Msk;
     
+    //kernel mode thread
+    p->save_psp = kstack + stack_size;
+    p->save_splim = kstack;
+    p->save_control.w = CONTROL_SPSEL_Msk;
+
+    //setup user mode stack
     p->psp -= sizeof(struct context_frame);
     struct context_frame* frame = (struct context_frame*) p->psp;
     memset(frame, 0, sizeof(struct context_frame));
     frame->exc_return = 0xFFFFFFBC;
-    frame->pc = (uint32_t) entry_point;
-    frame->cpsr.w = xPSR_T_Msk;
+    frame->base_frame.pc = (uint32_t) entry_point;
+    frame->base_frame.cpsr.b.T = 1;
+
+    //setup kernel mode stack
+    p->save_psp -= sizeof(struct context_frame);
+    frame = (struct context_frame*) p->save_psp;
+    memset(frame, 0, sizeof(struct context_frame));
+    frame->exc_return = 0xFFFFFFBC;
+    frame->base_frame.pc = (uint32_t) &svc_thread;
+    frame->base_frame.cpsr.b.T = 1;
 
     proc_enqueue(p);
     return p;
 }
 
-void proc_systick_handler()
+void proc_unblock_process(pid_t process)
 {
-    //__BKPT();
-    proc_ticks++;
-    //SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
-    __DSB();
+    __disable_irq();
+    proc_table[process].state = PROC_READY;
+    proc_enqueue(&proc_table[process]);
+    __enable_irq();
 }
 
-uint32_t get_kernel_ticks()
+void proc_block()
 {
-    return proc_ticks;
+    __disable_irq();
+    current_process->state = PROC_BLOCKED;
+    SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+    __DSB();
+    __enable_irq();
+    __WFI();
+    //wait until pendsv fires
 }
 
 void proc_sched_new_task()
 {
-    proc_enqueue(current_process);
+    if (current_process->state == PROC_READY) {
+        proc_enqueue(current_process);
+    }
     current_process = proc_dequeue();
+    if (current_process == NULL) { //we have to shutdown here
+        __BKPT();
+    }
 }
 
 void proc_start_scheduling()
 {
     __disable_irq();
-    SysTick_Config(48000);
     current_process = proc_dequeue();
+    SysTick->VAL = 0; //reset systick timer to prevent timer interrupt when the svc hasnt executed yet
     __asm volatile
     (
         "   cpsie i\t\n"

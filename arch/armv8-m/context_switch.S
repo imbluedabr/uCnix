@@ -12,7 +12,7 @@
     .globl   pendsv_handler
     .type    pendsv_handler, %function
 pendsv_handler:
-    bkpt
+    /* bkpt */
     mrs r0, psp
     isb
 
@@ -20,7 +20,6 @@ pendsv_handler:
     ldr r2, [r3]
     stmdb r0!, {r4-r11, r14}
     str r0, [r2]            /* Store the psp in proc->psp*/
-    
     stmdb sp!, {r3}
     
     cpsid i

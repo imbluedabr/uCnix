@@ -28,6 +28,7 @@ struct usart_device {
     uint8_t tx_tail;
     uint8_t rx_head;
     uint8_t rx_tail;
+    uint32_t bytes_transfered;
 };
 
 void usart_init();

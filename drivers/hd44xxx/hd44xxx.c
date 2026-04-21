@@ -3,6 +3,7 @@
 #include <kernel/time.h>
 #include <board/board.h>
 #include <uapi/majors.h>
+#include <lib/kprint.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include "port.h"
@@ -43,9 +44,6 @@ static const uint8_t display_format[][2] = {
     }
 };
 
-#define NEWL_MASK(IMPL) (display_format[IMPL][0] - 1)
-
-
 static const struct hd44xxx_impl disp_impl[] = {
     [HD_ST_9720] = {
         &st7920_init,
@@ -59,7 +57,6 @@ static const struct hd44xxx_impl disp_impl[] = {
         &hd44780_init,
         &hd44780_ioctl
     }
-
 };
 
 struct device_driver hd44xxx_driver = {
@@ -108,18 +105,11 @@ struct device* hd44xxx_create(uint8_t* minor, void* args)
     }
     struct hd44xxx_desc* desc = args;
     display->base.driver = &hd44xxx_driver;
-    display->base.io_queue_head = 0; //init queue
-    display->base.io_queue_tail = 0;
     display->base.impl = desc->type;
 
     display->base.next = hd44xxx_driver.instances;
     hd44xxx_driver.instances = &display->base;
 
-    display->cursor_pos = 0;
-    display->newl_pending = 0;
-    display->graphics_mode = 0;
-    display->cmd_head = 0;
-    display->cmd_tail = 0;
     *minor = hd44xxx_driver.instance_count++;
     port_init();
     disp_impl[desc->type].init(display, desc);
@@ -150,26 +140,28 @@ int hd44xxx_writeb(struct device* dev, char val)
 {
     struct hd44xxx_device* disp = (struct hd44xxx_device*) dev;
     if (disp->newl_pending) {
-        if (cmd_set_ddram(disp, DDRAM_addr[disp->base.impl][(disp->cursor_pos >> 4)]) == -1) { return -1; };
+        uint8_t tmp = disp->cursor_y + 1;
+        if (cmd_set_ddram(disp, DDRAM_addr[disp->base.impl][tmp]) == -1) { return -1; };
+        disp->cursor_x = 0;
+        disp->cursor_y = tmp;
         disp->newl_pending = 0;
     }
     
-    if (disp->cursor_pos == disp->screen_end) {
+    if (disp->cursor_y >= display_format[disp->base.impl][1]) {
         if (cmd_display_clear(disp) == -1) { return -1; };
-        disp->cursor_pos = 0;
+        disp->cursor_x = 0;
+        disp->cursor_y = 0;
     }
     if (val == '\n') {
-        disp->cursor_pos &= ~NEWL_MASK(disp->base.impl);
-        disp->cursor_pos += display_format[disp->base.impl][0];
+        disp->newl_pending = 1;
     } else if (val == '\b') {
-        disp->cursor_pos--;
+        disp->cursor_x--;
     } else {
         if (hd44xxx_push_cmd(disp, 1, val) == -1) { return -1; };
-        disp->cursor_pos++;
+        disp->cursor_x++;
     }
-    if ((disp->cursor_pos & NEWL_MASK(disp->base.impl)) == 0) {
+    if (disp->cursor_x >= display_format[disp->base.impl][0]) {
         disp->newl_pending = 1;
-        return -1;
     }
     return 0;
 }
@@ -177,17 +169,38 @@ int hd44xxx_writeb(struct device* dev, char val)
 void hd44xxx_update(struct device* dev)
 {
     struct hd44xxx_device* disp = (struct hd44xxx_device*) dev;
-    //struct io_request* current_req = device_peek_request(dev);
-    if (disp->cmd_head != disp->cmd_tail) {
-        uint8_t tmp = (disp->cmd_tail + 1) & (HD44XXX_CMD_BUFF_SIZE - 1);
-        disp->cmd_tail = tmp;
-        struct hd44xxx_cmd* cmd = &disp->cmd_buff[tmp];
-        write_port(disp, cmd->rs, cmd->data);
-        tiny_delay(1000);
+    uint8_t status = read_port(disp, 0);
+
+    if (!(status & 0x80)) {
+
+        if (disp->cmd_head != disp->cmd_tail) {
+            uint8_t tmp = (disp->cmd_tail + 1) & (HD44XXX_CMD_BUFF_SIZE - 1);
+            disp->cmd_tail = tmp;
+            struct hd44xxx_cmd* cmd = &disp->cmd_buff[tmp];
+            write_port(disp, cmd->rs, cmd->data);
+        }
+    }
+
+    struct io_request* req = device_peek_request(dev);
+    if (req == NULL) {
+        return;
+    }
+    uint32_t bytes_transfered = disp->bytes_transfered;
+
+    if (req->op) {
+        hd44xxx_writeb(dev, ((char*)req->buffer)[bytes_transfered++]);
+    } else {
+        ((char*)req->buffer)[bytes_transfered++] = hd44xxx_readb(dev);
+    }
+    if (bytes_transfered == req->count) {
+        req->count = bytes_transfered;
+        req->status = 1;
+        proc_unblock_process(req->waiter);
+        device_dequeue_request(dev);
+        disp->bytes_transfered = 0;
+    } else {
+        disp->bytes_transfered = bytes_transfered;
     }
 }
-
-
-
 
 

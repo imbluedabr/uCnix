@@ -64,28 +64,30 @@ struct device* device_create(dev_t* devno, uint8_t major, void* desc)
 
 int device_request_io(struct device* dev, struct io_request* req)
 {
-    uint8_t tmp = (dev->io_queue_head + 1) & DEVICE_IOQUEUE_MSK;
+    uint8_t tmp = dev->io_queue_head;
     if (dev->io_queue[tmp] != NULL) {
         return -1; //no space left
     }
-    dev->io_queue_head = tmp;
     dev->io_queue[tmp] = req;
+    dev->io_queue_head = (tmp + 1) & DEVICE_IOQUEUE_MSK;
     return 0;
 }
 
 struct io_request* device_dequeue_request(struct device* dev)
 {
-    uint8_t tmp = (dev->io_queue_tail + 1) & DEVICE_IOQUEUE_MSK;
+    uint8_t tmp = dev->io_queue_tail;
     if (dev->io_queue[tmp] == NULL) {
         return NULL; //there is nothing in the buffer
     }
-    dev->io_queue_head = tmp;
-    return dev->io_queue[tmp];
+    dev->io_queue_tail = (tmp + 1) & DEVICE_IOQUEUE_MSK;
+    struct io_request* req = dev->io_queue[tmp];
+    dev->io_queue[tmp] = NULL;
+    return req;
 }
 
 struct io_request* device_peek_request(struct device* dev)
 {
-    uint8_t tmp = (dev->io_queue_tail + 1) & DEVICE_IOQUEUE_MSK;
+    uint8_t tmp = dev->io_queue_tail;
     if (dev->io_queue[tmp] == NULL) {
         return NULL; //there is nothing in the buffer
     }
@@ -114,12 +116,13 @@ void device_global_update()
 {
     for (int i = 0; i < DRIVER_TABLE_LEN; i++) {
         struct device_driver* drv = driver_table[i];
-        if (drv != NULL) {
-            struct device* current = drv->instances;
-            while(current != NULL) {
-                drv->update(current);
-                current = current->next;
-            }
+        if (drv == NULL) {
+            continue;
+        }
+        struct device* current = drv->instances;
+        while(current != NULL) {
+            drv->update(current);
+            current = current->next;
         }
     }
 }

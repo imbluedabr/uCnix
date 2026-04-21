@@ -57,7 +57,7 @@ void* kmalloc(int size)
             if (new == NULL) {
                 return NULL;
             }
-            /*
+            
             new->prev = get_block_idx(current);
             new->next = current->next;
             if (current->next != BLOCK_NIL) {
@@ -68,7 +68,7 @@ void* kmalloc(int size)
             new->size = current->size - size;
             current->size = size;
             current->occupied = true;
-            current->next = get_block_idx(new);*/
+            current->next = get_block_idx(new);
             return base;
         }
         if (current->size == size && !current->occupied) {
@@ -86,6 +86,9 @@ void* kmalloc(int size)
 void* kzalloc(int size)
 {
     char* mem = kmalloc(size);
+    if (mem == NULL) {
+        return NULL;
+    }
     memset(mem, 0, size);
     return mem;
 }

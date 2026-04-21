@@ -25,13 +25,14 @@ struct hd44xxx_device {
     struct hd44xxx_cmd cmd_buff[HD44XXX_CMD_BUFF_SIZE];
     uint8_t cmd_tail;
     uint8_t cmd_head;
-    uint8_t cursor_pos;
+    uint8_t cursor_x : 5;
+    uint8_t cursor_y : 3;
     uint8_t screen_end;
     //flags
     uint8_t newl_pending : 1;
     uint8_t graphics_mode : 1;
 
-    uint32_t last_update;
+    uint32_t bytes_transfered;
 };
 
 struct hd44xxx_impl {
