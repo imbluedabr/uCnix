@@ -57,3 +57,16 @@ void* get_current_handler_struct() {
 }
 
 
+int disable_interrupts()
+{
+    int irqstat = __get_PRIMASK();
+    __disable_irq();
+    return irqstat;
+}
+
+void enable_interrupts(int irqstat)
+{
+    __set_PRIMASK(irqstat);
+}
+
+

@@ -32,6 +32,7 @@ void time_init()
     time_ticks = 0;
     register_interrupt(SysTick_IRQn, NULL, systick_handler);
     NVIC_SetPriority(SysTick_IRQn, 3);
+    SysTick_Config(48000);
     __enable_irq();
 }
 

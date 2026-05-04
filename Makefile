@@ -19,8 +19,8 @@ ifeq ($(CONFIG_BOARD_MCXA153), y)
 ARCH = armv8-m
 BOARD = mcxa153
 TOOLCHAIN = arm-none-eabi
-ARCH_CFLAGS = -mcpu=cortex-m33 -mthumb -mfloat-abi=soft -lgcc -std=gnu11 -DCPU_MCXA153VFM
-ARCH_LDFLAGS =
+ARCH_CFLAGS = -mthumb -mcpu=cortex-m33+nodsp -mfloat-abi=soft -std=gnu11 -DCPU_MCXA153VFM
+ARCH_LDFLAGS = -mthumb -mcpu=cortex-m33+nodsp
 $(shell echo "#define BOARD_MCXA153" >> $(SETTINGS_FILE))
 endif
 
@@ -94,7 +94,7 @@ MN_FILE ?= kernel.elf
 
 CFLAGS = $(ARCH_CFLAGS) -ffreestanding -Wall -Wextra -Wno-unused-parameter  $(INCL)
 ASFLAGS = $(CFLAGS)
-LDFLAGS = $(ARCH_LDFLAGS) -nostdlib -nostartfiles -static
+LDFLAGS = $(ARCH_LDFLAGS) -nostartfiles -static
 
 
 ifeq ($(CONFIG_DEBUG), y)

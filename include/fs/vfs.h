@@ -27,11 +27,12 @@ struct fatfs_inode {
 };
 
 struct inode {
-    struct superblock* fs; //this is the filesystem that the inode is part of
-    char name[FS_INAME_LEN + 1]; //the name of the file
-    uint8_t refcount; //the amount of references exist to this inode, this includes file descriptors and dentries
-    ino_t dir; //the parent directory of this inode
-    ino_t file; //the inum of this inode
+    struct superblock* fs;      //this is the filesystem that the inode is part of
+    struct inode* next;         //linked list of free inodes or cached inodes
+    char name[FS_INAME_LEN + 1];//the name of the file
+    uint8_t refcount;           //the amount of references exist to this inode, this includes file descriptors and dentries
+    ino_t dir;                  //the parent directory of this inode
+    ino_t file;                 //the inum of this inode
     size_t size;
     struct permissions perm;
     union {
@@ -53,9 +54,8 @@ struct file_ops {
     int (*mount)(struct inode* mountpoint, dev_t devno, const char* args);
     int (*umount)(struct superblock* fs);
     
-    int (*mkdir)(struct inode* dir, const char* name);
-    int (*rmdir)(struct inode* dir);
-    int (*unlink)(struct inode* target);
+    struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
+    int (*remove)(struct inode* target);
 
     struct permissions (*getperm)(struct inode* target);
     int (*setperm)(struct inode* target, struct permissions perm);
@@ -68,6 +68,7 @@ struct file_ops {
 
 struct superblock {
     struct file_ops* fops;
+    uint8_t fsid; //filesystem id, used by filesystems to ensure unique inode numbers
 };
 
 struct file {
@@ -75,5 +76,12 @@ struct file {
     uint32_t offset : 24;
     uint8_t flags : 8;
 };
+
+
+struct inode* inode_alloc();
+void inode_free(struct inode* i);
+
+void vfs_init();
+struct inode* vfs_lookup(const char* path);
 
 

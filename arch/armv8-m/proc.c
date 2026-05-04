@@ -105,7 +105,9 @@ void proc_unblock_process(pid_t process)
     __disable_irq();
     proc_table[process].state = PROC_READY;
     proc_enqueue(&proc_table[process]);
+    SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
     __enable_irq();
+    __WFI();
 }
 
 void proc_block()

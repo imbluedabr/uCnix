@@ -16,3 +16,7 @@ int get_current_interrupt();
 
 void* get_current_handler_struct();
 
+int disable_interrupts();
+
+void enable_interrupts(int irqstat);
+

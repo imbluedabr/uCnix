@@ -1,8 +1,7 @@
 #pragma once
-#include <stdint.h>
+#include <uapi/sys/types.h>
+#include <kernel/waiter.h>
 #include <board/board.h>
-
-typedef uint8_t pid_t;
 
 typedef enum : uint8_t {
     PROC_BLOCKED,
@@ -20,8 +19,14 @@ struct proc {
     CONTROL_Type save_control;
     uint8_t* save_splim;
 #endif
+
     process_state_e state;
     pid_t pid;
+    pid_t pgrp;
+    uint8_t refcount;
+
+    waiter_t* waiter;
+    struct proc* wait_next; //next item in the wait queue
 };
 
 extern struct proc* current_process;

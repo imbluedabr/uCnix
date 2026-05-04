@@ -195,7 +195,7 @@ void hd44xxx_update(struct device* dev)
     if (bytes_transfered == req->count) {
         req->count = bytes_transfered;
         req->status = 1;
-        proc_unblock_process(req->waiter);
+        proc_unblock_process(waiter_pop(&req->waiter)->pid);
         device_dequeue_request(dev);
         disp->bytes_transfered = 0;
     } else {

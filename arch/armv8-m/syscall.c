@@ -44,9 +44,10 @@ void syscall_thread_main()
         .offset = 0,
         .op = 1,
         .status = 0,
-        .count = size,
-        .waiter = current_process->pid
+        .count = size
     };
+
+    waiter_push(&req.waiter, current_process);
     
     device_request_io(dev, &req);
     

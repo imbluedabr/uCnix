@@ -3,23 +3,20 @@
 #include <stdint.h>
 #include <uapi/sys/types.h>
 #include <kernel/proc.h>
+#include <kernel/waiter.h>
 
 //maximum of io_request's that can be allocated at one time
 #define IO_REQUEST_MAX_MEMUSAGE 8
 
 struct io_request {
     void* buffer;
-    uint32_t offset : 24;
+    off_t offset;
+    uint32_t count  : 24;
     uint8_t op      : 1; //op: read = 0, write = 1
     uint8_t status  : 1; //status: pending = 0, done = 1
     uint8_t res0    : 6; //reserved
-    uint32_t count  : 24;
-    pid_t waiter    : 8; //process waiting for this to complete
-    struct io_request* next_free; //this is used to keep a free list of io_request objects to speed up allocation
+    waiter_t waiter;     //process waiting for the request to complete
 };
-
-struct io_request* io_request_create();
-void io_request_destroy(struct io_request* req);
 
 struct device;
 
