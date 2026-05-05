@@ -2,6 +2,7 @@
 #include <kernel/alloc.h>
 #include <kernel/settings.h>
 #include <kernel/majors.h>
+#include <kernel/proc.h>
 #include "mcxa.h"
 
 //build table of available backends

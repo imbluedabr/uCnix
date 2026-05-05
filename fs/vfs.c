@@ -2,6 +2,7 @@
 #include <kernel/alloc.h>
 #include <kernel/interrupt.h>
 #include <kernel/lock.h>
+#include <kernel/proc.h>
 #include <lib/stdlib.h>
 
 static struct inode* free_list;

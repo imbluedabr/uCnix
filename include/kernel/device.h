@@ -2,7 +2,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <uapi/sys/types.h>
-#include <kernel/proc.h>
 #include <kernel/waiter.h>
 
 //maximum of io_request's that can be allocated at one time
