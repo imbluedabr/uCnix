@@ -1,4 +1,5 @@
 #include <kernel/alloc.h>
+#include <kernel/lock.h>
 #include <lib/stdlib.h>
 #include <stddef.h>
 
@@ -7,6 +8,8 @@ static char* block_base;
 
 static uint8_t unused_blocks[BLOCK_ARRAY_LEN];
 static uint8_t unused_blocks_top;
+
+mutex_t alloc_mut;
 
 struct block* get_block()
 {
@@ -35,6 +38,7 @@ void put_block(struct block* b)
 
 void init_heap(void* base, int size)
 {
+    mutex_init(&alloc_mut);
     block_base = base;
     block_array[0].size = size;
     block_array[0].occupied = false;
@@ -48,6 +52,8 @@ void init_heap(void* base, int size)
 
 void* kmalloc(int size)
 {
+    mutex_lock(&alloc_mut);
+    
     struct block* current = get_block_addr(0);
     char* base = block_base;
     do {
@@ -55,7 +61,8 @@ void* kmalloc(int size)
             
             struct block* new = get_block();
             if (new == NULL) {
-                return NULL;
+                base = NULL;
+                break;
             }
             
             new->prev = get_block_idx(current);
@@ -69,18 +76,22 @@ void* kmalloc(int size)
             current->size = size;
             current->occupied = true;
             current->next = get_block_idx(new);
-            return base;
+            break;
         }
         if (current->size == size && !current->occupied) {
             current->occupied = true;
-            return base;
+            break;
         }
         if (current->next == BLOCK_NIL) {
-            return NULL;
+            base = NULL;
+            break;
         }
         base += current->size;
         current = get_block_addr(current->next);
     } while(1);
+
+    mutex_unlock(&alloc_mut);
+    return base;
 }
 
 void* kzalloc(int size)
@@ -127,6 +138,7 @@ void try_coalesce(struct block* b)
 
 void kfree(void* ptr)
 {
+    mutex_lock(&alloc_mut);
     struct block* current = get_block_addr(0);
     char* base = block_base;
     do {
@@ -134,14 +146,15 @@ void kfree(void* ptr)
         if (base == ptr) {
             current->occupied = false;
             try_coalesce(current);
-            return;
+            break;
         }
 
         if (current->next == BLOCK_NIL) {
-            return;
+            break;
         }
         base += current->size;
         current = get_block_addr(current->next);
     } while(1);
+    mutex_unlock(&alloc_mut);
 }
 

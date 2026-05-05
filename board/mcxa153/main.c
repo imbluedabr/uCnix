@@ -8,6 +8,7 @@
 #include <kernel/syscall.h>
 #include <kernel/majors.h>
 #include <kernel/lock.h>
+#include <fs/vfs.h>
 #include <drivers/usart.h>
 #include <drivers/hd44xxx.h>
 #include <lib/kprint.h>
@@ -30,7 +31,7 @@ void gpio_output_init(void)
 [[gnu::aligned(8)]] char heap[2048];
 struct device* usart0;
 
-mutex_t test_mut;
+mutex_t test_mut = { .lock = 1 };
 
 [[gnu::aligned(8)]] uint8_t test1_ustack[128];
 [[gnu::aligned(8)]] uint8_t test1_kstack[128];
@@ -38,10 +39,17 @@ uint32_t test1_time;
 void test1_process()
 {
     while(1) {
-        test_mut.lock();
-        if ((get_kernel_ticks() - test1_time) > 250) {
+
+        if ((get_kernel_ticks() - test1_time) > 1000) {
             test1_time = get_kernel_ticks();
             
+            //togle mutex
+            if (test_mut.lock) {
+                mutex_unlock(&test_mut);
+            } else {
+                mutex_lock(&test_mut);
+            }
+ 
             GPIO3->PTOR = 1 << 13;
         }
         device_global_update();
@@ -65,20 +73,12 @@ void write_dev(dev_t devno, const void* buffer, int count)
 
 void test2_process()
 {
-    mutex_init(&test_mut);
-
     while(1) {
-        if ((get_kernel_ticks() - test2_time) > 1000) {
+        if ((get_kernel_ticks() - test2_time) > 250) {
             test2_time = get_kernel_ticks();
-            
-            //togle mutex
-            if (test_mut.lock) {
-                mutex_unlock(&test_mut);
-            } else {
-                mutex_lock(&test_mut);
-            }
-
-            kprintf("Hello!\n");
+            mutex_lock(&test_mut);
+            kputc('A');
+            mutex_unlock(&test_mut);
         }
     };
 }
@@ -92,6 +92,7 @@ void main()
     device_init();
     proc_init();
     syscall_init();
+    vfs_init();
     usart_init();
     hd44xxx_init();
     gpio_output_init();

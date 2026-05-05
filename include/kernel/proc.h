@@ -1,13 +1,22 @@
 #pragma once
 #include <uapi/sys/types.h>
 #include <kernel/waiter.h>
+#include <fs/vfs.h>
 #include <board/board.h>
 
 typedef enum : uint8_t {
+    PROC_ZOMBIE,
     PROC_BLOCKED,
-    PROC_READY,
-    PROC_DEAD
+    PROC_READY
 } process_state_e;
+
+typedef struct {
+    gid_t rgid;
+    gid_t egid;
+    uid_t ruid;
+    uid_t euid;
+    gid_t groups[4];
+} cred_t;
 
 struct proc {
 #ifdef __ARM_ARCH_8M_MAIN__
@@ -22,8 +31,12 @@ struct proc {
 
     process_state_e state;
     pid_t pid;
+    pid_t ppid;
     pid_t pgrp;
-    uint8_t refcount;
+    cred_t credentials;
+    uint32_t sigmask;
+
+    struct inode* cwd;
 
     waiter_t* waiter;
     struct proc* wait_next; //next item in the wait queue

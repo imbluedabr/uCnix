@@ -51,7 +51,7 @@ struct file_ops {
     int (*ftruncate)(struct file* f, off_t lenght);
 
     //inode operations
-    int (*mount)(struct inode* mountpoint, dev_t devno, const char* args);
+    int (*mount)(struct inode* mountpoint, struct device* dev, const char* args);
     int (*umount)(struct superblock* fs);
     
     struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
@@ -82,6 +82,6 @@ struct inode* inode_alloc();
 void inode_free(struct inode* i);
 
 void vfs_init();
-struct inode* vfs_lookup(const char* path);
+struct inode* vfs_walk_path(const char* path);
 
 

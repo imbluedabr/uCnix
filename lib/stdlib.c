@@ -50,7 +50,7 @@ int strncpy(char* dest, char* src, uint32_t size)
     return i;
 }
 
-int strlcpy(char* dest, char* src, uint32_t size)
+int strlcpy(char* dest, const char* src, uint32_t size)
 {
     int i = 0;
     while((*src != '\0') && (size-- > 0)) {
@@ -70,7 +70,7 @@ int strlcpy(char* dest, char* src, uint32_t size)
 }
 
 
-[[gnu::used]] void* memcpy(void* dest, void* source, size_t size)
+[[gnu::used]] void* memcpy(void* dest, const void* source, size_t size)
 {
     while(size-- > 0) {
         ((uint8_t*) dest)[size] = ((uint8_t*) source)[size];
