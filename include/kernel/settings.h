@@ -2,6 +2,8 @@
 #define ROOTFS_TYPE ""
 #define INIT_PATH ""
 #define INIT_CONSOLE_DEVNO 
+#define PROC_MAXFILES 32
+#define VFS_MAXFILES 32
 #define BOARD_TYPE mcxa153
 #define BOARD_MCXA153
 #define USART_DRIVER

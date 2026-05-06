@@ -1,5 +1,6 @@
 #include <kernel/device.h>
 #include <kernel/interrupt.h>
+#include <kernel/proc.h>
 
 struct device_driver* driver_table[DRIVER_TABLE_LEN];
 
@@ -63,6 +64,40 @@ struct io_request* device_peek_request(struct device* dev)
     struct io_request* req = dev->io_queue[tmp]; //if the queue is empty this will just return NULL
     enable_interrupts(irq);
     return req;
+}
+
+ssize_t device_write(struct device* dev, void* buffer, size_t count, off_t offset) //blocking write to device
+{
+    struct io_request req = {
+        .buffer = buffer,
+        .offset = offset,
+        .count = count,
+        .op = 1
+    };
+    waiter_push(&req.waiter, current_process);
+
+    device_request_io(dev, &req);
+
+    proc_block();
+
+    return req.count;
+}
+
+ssize_t device_read(struct device* dev, void* buffer, size_t count, off_t offset)
+{
+    struct io_request req = {
+        .buffer = buffer,
+        .offset = offset,
+        .count = count,
+        .op = 0
+    };
+    waiter_push(&req.waiter, current_process);
+
+    device_request_io(dev, &req);
+
+    proc_block();
+    
+    return req.count;
 }
 
 //device lookup is O(n) because devices are kept as linked lists

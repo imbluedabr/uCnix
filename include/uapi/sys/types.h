@@ -15,6 +15,5 @@ typedef uint8_t pid_t;
 typedef uint8_t uid_t;
 typedef uint8_t gid_t;
 typedef uint16_t mode_t;
-typedef uint32_t time_t;
-
+typedef uint8_t fsid_t;
 

@@ -50,6 +50,8 @@ struct device* device_create(dev_t* devno, uint8_t major, void* desc);
 int device_request_io(struct device* dev, struct io_request* req); //enqueue an io request in the io queue of a device
 struct io_request* device_dequeue_request(struct device* dev); //dequeue the top request from the queue
 struct io_request* device_peek_request(struct device* dev); //get the top request without removing it from the queue
+ssize_t device_write(struct device* dev, void* buffer, size_t count, off_t offset); //blocking write to device
+ssize_t device_read(struct device* dev, void* buffer, size_t count, off_t offset);
 struct device* device_lookup(dev_t devno);
 void device_global_update();
 

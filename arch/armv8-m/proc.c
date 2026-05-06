@@ -5,6 +5,7 @@
 #include <lib/stdlib.h>
 #include <arch/armv8-m/proc.h>
 #include <arch/armv8-m/syscall.h>
+#include <uapi/sys/errno.h>
 #include <stddef.h>
 
 struct proc proc_table[PROC_TABLE_LEN];
@@ -41,7 +42,35 @@ struct proc* proc_dequeue()
     return process;
 }
 
+int proc_fd_alloc(struct proc* p)
+{
+    for (int i = 0; i < PROC_MAXFILES; i++) {
+        if (p->local_fd_table[i] == 255) {
+            return i;
+        }
+    }
+    return -EMFILE;
+}
 
+void proc_fd_free(struct proc* p, int fd)
+{
+    p->local_fd_table[fd] = 255;
+}
+
+struct file* proc_fd_get(struct proc* p, int fd)
+{
+    if (fd == 255) return NULL;
+    if (p->local_fd_table[fd] >= VFS_MAXFILES) return NULL;
+    return &vfs_file_table[p->local_fd_table[fd]];
+}
+
+int proc_fd_add(struct proc* p, struct file* f)
+{
+    int fd = proc_fd_alloc(p);
+    if (fd < 0) return fd;
+    p->local_fd_table[fd] = f - vfs_file_table;
+    return fd;
+}
 
 void proc_init()
 {
@@ -95,6 +124,8 @@ struct proc* proc_create(uint8_t* ustack, uint8_t* kstack, uint32_t stack_size, 
     frame->exc_return = 0xFFFFFFBC;
     frame->base_frame.pc = (uint32_t) &svc_thread;
     frame->base_frame.cpsr.b.T = 1;
+
+    memset(p->local_fd_table, 255, PROC_MAXFILES);
 
     proc_enqueue(p);
     return p;
