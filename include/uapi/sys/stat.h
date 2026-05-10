@@ -1,12 +1,15 @@
 #pragma once
 #include "types.h"
 #include "../limits.h"
+#include "time.h"
 
+//if S_IFDIR is set we have a directory or a mountpoint
+//if S_IFDEV is set we have a device or a socket
 
 #define S_IFREG     (0b0001 << 12)
 #define S_IFDIR     (0b0010 << 12)
-#define S_IFDEV     (0b0011 << 12)
-#define S_IFMNT     (0b0100 << 12)
+#define S_IFMNT     (0b0011 << 12)
+#define S_IFDEV     (0b0100 << 12)
 #define S_IFSOCK    (0b0101 << 12)
 
 #define S_ISUID     (0b100 << 9)

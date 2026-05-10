@@ -4,8 +4,10 @@
 #include <kernel/lock.h>
 #include <kernel/proc.h>
 #include <lib/stdlib.h>
+#include <lib/kprint.h>
 #include <uapi/sys/stat.h>
 #include <uapi/sys/errno.h>
+#include <uapi/sys/disk.h>
 
 const struct file_ops fatfs_file_ops = {
     .read = &fatfs_read,
@@ -47,7 +49,7 @@ ssize_t fatfs_read(struct file* f, char* buff, int count)
     uint32_t bytes_read = 0;
 
     if (byte_offset != 0) {
-        device_read(fs->dev, fs->scratch_buff.raw, FATFS_SECTOR_SIZE, CALC_SADRES(fat_sector));
+        device_read(fs->dev, fs->scratch_buff.raw, fs->blocks_per_sector, (fat_sector + 1)*fs->blocks_per_sector);
         
         int to_read = FATFS_SECTOR_SIZE - byte_offset;
         if (to_read > count) to_read = count;
@@ -61,7 +63,7 @@ ssize_t fatfs_read(struct file* f, char* buff, int count)
     }
 
     for (int i = 0; i < (count >> FATFS_SECTOR_LEN); i++) {
-        device_read(fs->dev, buff + bytes_read, FATFS_SECTOR_SIZE, CALC_SADRES(fat_sector));
+        device_read(fs->dev, buff + bytes_read, fs->blocks_per_sector, (fat_sector + 1)*fs->blocks_per_sector);
         bytes_read += FATFS_SECTOR_SIZE;
         fat_sector = fs->fat_cache[fat_sector];
         if (fat_sector == FATFS_SECTOR_END) {
@@ -71,7 +73,7 @@ ssize_t fatfs_read(struct file* f, char* buff, int count)
 
     if ((count - bytes_read) > 0) {
         int to_read = count - bytes_read;
-        device_read(fs->dev, fs->scratch_buff.raw, FATFS_SECTOR_SIZE, CALC_SADRES(fat_sector));
+        device_read(fs->dev, fs->scratch_buff.raw, fs->blocks_per_sector, (fat_sector + 1)*fs->blocks_per_sector);
 
         memcpy(buff + bytes_read, fs->scratch_buff.raw, to_read);
         bytes_read += to_read;
@@ -90,7 +92,7 @@ int fatfs_readdir(struct file* f, struct dirent* buff, int count)
     struct inode* dir = f->i;
     struct fatfs_superblock* fs = (struct fatfs_superblock*) dir->fs;
 
-    device_read(fs->dev, fs->scratch_buff.raw, FATFS_SECTOR_SIZE, CALC_SADRES(dir->fatfs.fat_index));
+    device_read(fs->dev, fs->scratch_buff.raw, fs->blocks_per_sector, (dir->fatfs.fat_index + 1)*fs->blocks_per_sector);
     
     int i = 0;
     for (; i < count; i++) {
@@ -125,13 +127,14 @@ off_t fatfs_ftruncate(struct file* f, off_t lenght)
 }
 
 //inode operations
-int fatfs_mount(struct inode* mountpoint, dev_t devno, const char* args) {
+int fatfs_mount(struct inode* mountpoint, dev_t devno, int mountflags) {
     struct fatfs_superblock* fs = kzalloc(sizeof(struct fatfs_superblock));
     if (!fs) {
         return -ENOMEM;
     }
     
     fs->base.fsid = vfs_get_fsid();
+    fs->base.fops = (struct file_ops*) &fatfs_file_ops;
     fs->devno = devno;
     fs->dev = device_lookup(devno);
     if (fs->dev == NULL) {
@@ -143,8 +146,18 @@ int fatfs_mount(struct inode* mountpoint, dev_t devno, const char* args) {
     mountpoint->file = fatfs_calc_ino(fs, 0);
     mountpoint->fs = &fs->base;
 
-    device_read(fs->dev, fs->scratch_buff.raw, FATFS_SECTOR_SIZE, FATFS_FAT_START);
-    memcpy(fs->fat_cache, fs->scratch_buff.raw, 256);
+    uint16_t dev_bsize;
+    fs->dev->driver->ioctl(fs->dev, IOCTL_BLK_GETSECSZ, &dev_bsize);
+
+    device_read(fs->dev, fs->scratch_buff.raw, 1, 0); //block 0 contains the disk descriptor
+    memcpy(fs->fat_cache, fs->scratch_buff.desc.fat_table, 256);
+    
+    fs->base.block_count = fs->scratch_buff.desc.block_count;
+    fs->base.block_size = fs->scratch_buff.desc.block_size;
+    fs->base.block_used = fs->scratch_buff.desc.block_used;
+    if (fs->base.block_count == 0 || fs->base.block_used == 0) return -EIO;
+    fs->blocks_per_sector = fs->base.block_size/dev_bsize;
+    
     return 0;
 }
 
@@ -173,7 +186,7 @@ struct inode* fatfs_lookupn(struct inode* dir, const char* name) //lookup an ino
 {
     struct fatfs_superblock* fs = (struct fatfs_superblock*) dir->fs;
 
-    device_read(fs->dev, fs->scratch_buff.raw, FATFS_SECTOR_SIZE, CALC_SADRES(dir->fatfs.fat_index));
+    device_read(fs->dev, fs->scratch_buff.raw, fs->blocks_per_sector, (dir->fatfs.fat_index + 1)*fs->blocks_per_sector);
 
     for (uint32_t i = 0; i < FATFS_DIR_LEN; i++) {
         struct fatfs_file* file = &fs->scratch_buff.dirs[i];

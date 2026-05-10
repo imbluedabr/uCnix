@@ -8,11 +8,15 @@ CONFIG ?= .config
 
 SETTINGS_FILE = $(ROOT)/include/kernel/settings.h
 
-$(shell echo "#define ROOTFS_DEVNO (($(CONFIG_ROOTFS_DEV_MAJ) << 4) | $(CONFIG_ROOTFS_DEV_MIN))" > $(SETTINGS_FILE))
+$(shell echo "#define ROOTFS_DEVNO (($(CONFIG_ROOTFS_DEV_MAJOR) << 4) | $(CONFIG_ROOTFS_DEV_MINOR))" > $(SETTINGS_FILE))
 $(shell echo "#define ROOTFS_TYPE \"$(CONFIG_ROOTFS_TYPE)\"" >> $(SETTINGS_FILE))
 $(shell echo "#define INIT_PATH \"$(CONFIG_INIT_PATH)\"" >> $(SETTINGS_FILE))
-$(shell echo "#define INIT_CONSOLE_DEVNO $(CONFIG_INIT_CONSOLE_DEVNO)" >> $(SETTINGS_FILE))
+$(shell echo "#define INIT_CONSOLE_RDEV $(CONFIG_INIT_CONSOLE_RDEV)" >> $(SETTINGS_FILE))
+$(shell echo "#define INIT_CONSOLE_WDEV $(CONFIG_INIT_CONSOLE_WDEV)" >> $(SETTINGS_FILE))
 $(shell echo "#define BOARD_TYPE $(CONFIG_BOARD_TYPE)" >> $(SETTINGS_FILE))
+$(shell echo "#define BOARD_ARCH \"$(CONFIG_BOARD_ARCH)\"" >> $(SETTINGS_FILE))
+$(shell echo "#define VFS_MAXFILES $(CONFIG_VFS_MAXFILES)" >> $(SETTINGS_FILE))
+$(shell echo "#define PROC_MAXFILES $(CONFIG_PROC_MAXFILES)" >> $(SETTINGS_FILE))
 
 
 ifeq ($(CONFIG_BOARD_MCXA153), y)
@@ -39,6 +43,10 @@ DEV_SELECT += drivers/tty/tty.c
 $(shell echo "#define TTY_DRIVER" >> $(SETTINGS_FILE))
 endif
 
+ifeq ($(CONFIG_ROMDISK_DRIVER), y)
+DEV_SELECT += drivers/romdisk/romdisk.c
+$(shell echo "#define ROMDISK_DRIVER" >> $(SETTINGS_FILE))
+endif
 
 ifeq ($(CONFIG_USART_DRIVER), y)
 DEV_SELECT += drivers/usart/usart.c
@@ -62,7 +70,6 @@ ifeq ($(CONFIG_HD44XXX_DRIVER_ST7920), y)
 DEV_SELECT += drivers/hd44xxx/st7920.c
 $(shell echo "#define HD44XXX_DRIVER_ST7920" >> $(SETTINGS_FILE))
 endif
-
 
 
 
@@ -94,7 +101,7 @@ MN_FILE ?= kernel.elf
 
 CFLAGS = $(ARCH_CFLAGS) -ffreestanding -Wall -Wextra -Wno-unused-parameter  $(INCL)
 ASFLAGS = $(CFLAGS)
-LDFLAGS = $(ARCH_LDFLAGS) -nostartfiles -static
+LDFLAGS = $(ARCH_LDFLAGS) -nostartfiles -static -Wl,-Map=kernel.map
 
 
 ifeq ($(CONFIG_DEBUG), y)
@@ -110,12 +117,12 @@ CFLAGS += -flto
 LDFLAGS += -flto
 endif
 
-OBJS = $(patsubst %.c,$(BUILD)/%.o,$(CSRCS)) $(patsubst %.S,$(BUILD)/%.o,$(ASRCS))
+OBJS = $(patsubst %.c,$(BUILD)/%.o,$(CSRCS)) $(patsubst %.S,$(BUILD)/%.o,$(ASRCS)) rootfs.o
 CC = $(TOOLCHAIN)-gcc 
 OBJCOPY = $(TOOLCHAIN)-objcopy
 READELF = $(TOOLCHAIN)-readelf
 
-.PHONY: userspace install
+.PHONY: userspace install tools
 
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -125,6 +132,8 @@ $(BUILD)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(ASFLAGS) -c $< -o $@
 
+rootfs.o: rootfs.bin
+	$(OBJCOPY) -I binary -O elf32-littlearm -B arm rootfs.bin rootfs.o
 
 $(MN_FILE): $(OBJS)
 	$(CC) $(LDFLAGS) -T $(LNKF) $(OBJS) -o $@
@@ -132,11 +141,14 @@ $(MN_FILE): $(OBJS)
 image: $(MN_FILE)
 	$(OBJCOPY) -O binary $(MN_FILE) image.bin
 
+tools:
+	$(MAKE) -C $(ROOT)/tools all
+
 dump:
 	$(TOOLCHAIN)-objdump -d -M no-aliases $(MN_FILE) >> dump.s.dump
 	$(TOOLCHAIN)-objdump -S -d -M no-aliases $(MN_FILE) >> verbose_dump.s.dump
 
 clean:
-	rm -r $(BUILD)
+	rm -r $(BUILD) rootfs.o
 
 

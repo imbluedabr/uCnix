@@ -118,12 +118,14 @@ struct proc* proc_create(uint8_t* ustack, uint8_t* kstack, uint32_t stack_size, 
     frame->base_frame.cpsr.b.T = 1;
 
     //setup kernel mode stack
-    p->save_psp -= sizeof(struct context_frame);
-    frame = (struct context_frame*) p->save_psp;
-    memset(frame, 0, sizeof(struct context_frame));
-    frame->exc_return = 0xFFFFFFBC;
-    frame->base_frame.pc = (uint32_t) &svc_thread;
-    frame->base_frame.cpsr.b.T = 1;
+    if (kstack) {
+        p->save_psp -= sizeof(struct context_frame);
+        frame = (struct context_frame*) p->save_psp;
+        memset(frame, 0, sizeof(struct context_frame));
+        frame->exc_return = 0xFFFFFFBC;
+        frame->base_frame.pc = (uint32_t) &svc_thread;
+        frame->base_frame.cpsr.b.T = 1;
+    }
 
     memset(p->local_fd_table, 255, PROC_MAXFILES);
 
@@ -163,7 +165,7 @@ void proc_sched_new_task()
     }
 }
 
-void proc_start_scheduling()
+[[noreturn]] void proc_start_scheduling()
 {
     __disable_irq();
     current_process = proc_dequeue();
@@ -173,5 +175,20 @@ void proc_start_scheduling()
         "   cpsie i\t\n"
         "   svc #0\t\n"
     );
+    while(1);
 }
+
+struct proc* proc_stop_scheduling()
+{
+    __disable_irq();
+
+    //disable the systick timer
+    SysTick->CTRL &= ~(SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk);
+
+    struct proc* last_process = current_process;
+    current_process = NULL;
+    
+    return last_process;
+}
+
 

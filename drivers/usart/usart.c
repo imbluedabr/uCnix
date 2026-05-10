@@ -26,6 +26,7 @@ struct device_driver usart_driver = {
     .writeb = &usart_writeb,
     .update = &usart_update,
     .instances = NULL,
+    .name = "usart",
     .instance_count = 0
 };
 
@@ -34,7 +35,7 @@ void usart_init()
     driver_table[USART_MAJOR] = &usart_driver;
 }
 
-struct device* usart_create(uint8_t* minor, void* desc)
+struct device* usart_create(void* desc)
 {
     struct usart_device* usart = kzalloc(sizeof(struct usart_device));
     if (usart == NULL) {
@@ -42,16 +43,6 @@ struct device* usart_create(uint8_t* minor, void* desc)
     }
 
     usart->base.driver = &usart_driver;
-    usart->base.next = usart_driver.instances; //append the new instance to the linked list
-    usart_driver.instances = &usart->base;
-
-    //update instance count and set minor value
-    uint8_t tmp = usart_driver.instance_count + 1;
-    if (tmp > 15) {
-        return NULL; //max instance count reached
-    }
-    usart_driver.instance_count = tmp;
-    *minor = tmp;
     struct usart_desc* d = desc;
     usart->base.impl = d->type;
     usart->usart_base = d->base;

@@ -16,4 +16,7 @@ void memset(void* dest, uint8_t value, uint32_t size);
 
 void* memcpy(void* dest, const void* source, size_t size);
 
+void reverse(char s[], int length);
+
+char* itoa(int num, char* str, int base);
 

@@ -12,6 +12,8 @@ struct block {
 #define BLOCK_ARRAY_LEN 64
 #define BLOCK_NIL 255
 
+extern uint8_t __heap_start[];
+
 //init heap for kmalloc
 void init_heap(void* base, int size);
 

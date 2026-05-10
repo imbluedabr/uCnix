@@ -6,3 +6,4 @@ build
 *.vs
 *.dump
 *.dump.old
+*.map

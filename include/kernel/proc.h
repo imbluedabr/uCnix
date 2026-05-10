@@ -59,7 +59,9 @@ void proc_fd_free(struct proc* p, int fd);
 int proc_fd_add(struct proc* p, struct file* f);
 struct file* proc_fd_get(struct proc* p, int fd);
 
-
 //starts the scheduler and never returns
 void proc_start_scheduling();
+
+//stops the scheduler
+struct proc* proc_stop_scheduling();
 

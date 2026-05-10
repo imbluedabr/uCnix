@@ -9,7 +9,7 @@
 
 struct io_request {
     void* buffer;
-    off_t offset;
+    ssize_t offset;
     uint32_t count  : 24;
     uint8_t op      : 1; //op: read = 0, write = 1
     uint8_t status  : 1; //status: pending = 0, done = 1
@@ -20,13 +20,14 @@ struct io_request {
 struct device;
 
 struct device_driver {
-    struct device* (*create)(uint8_t* minor, void* descriptor);
+    struct device* (*create)(void* descriptor);
     int (*destroy)(struct device* dev);
     int (*ioctl)(struct device* dev, int op, void* arg);
     int (*readb)(struct device* dev);
     int (*writeb)(struct device* dev, char val);
     void (*update)(struct device* dev);
     struct device* instances; //linked list of device instances
+    const char* name;
     uint8_t instance_count;
 };
 
@@ -39,17 +40,18 @@ struct device {
     uint8_t io_queue_head;
     uint8_t io_queue_tail;
     uint8_t impl; //for selecting backends
-    uint8_t flags; //driver specific flags
+    uint8_t minor; //minor number of this instance
 };
 
 #define DRIVER_TABLE_LEN 16
 extern struct device_driver* driver_table[DRIVER_TABLE_LEN];
 
 void device_init();
-struct device* device_create(dev_t* devno, uint8_t major, void* desc);
+struct device* device_create(dev_t* devno, uint8_t major, const void* desc);
 int device_request_io(struct device* dev, struct io_request* req); //enqueue an io request in the io queue of a device
 struct io_request* device_dequeue_request(struct device* dev); //dequeue the top request from the queue
 struct io_request* device_peek_request(struct device* dev); //get the top request without removing it from the queue
+void device_finish_request(struct device* dev, ssize_t bytes_transfered); //finish a device request obtained via peek
 ssize_t device_write(struct device* dev, void* buffer, size_t count, off_t offset); //blocking write to device
 ssize_t device_read(struct device* dev, void* buffer, size_t count, off_t offset);
 struct device* device_lookup(dev_t devno);

@@ -1,7 +1,7 @@
 
 ENTRY(reset_handler)
 
-STACK_SIZE = DEFINED(__stack_size__) ? __stack_size__ : 0x0800;
+STACK_SIZE = DEFINED(__stack_size__) ? __stack_size__ : 0x0200;
 
 /* Specify the memory areas */
 MEMORY
@@ -30,6 +30,15 @@ SECTIONS
     *(.rodata*)
     . = ALIGN(4);
   } > m_flash
+
+  .rootfs :
+  {
+    . = ALIGN(4);
+    __rootfs_start = .;
+    KEEP(rootfs.o(.data))
+    __rootfs_end = .;
+    . = ALIGN(4);
+  } > m_flash
   
   __DATA_ROM = .;
   .data : AT(__DATA_ROM)
@@ -52,14 +61,12 @@ SECTIONS
     . = ALIGN(4);
     __bss_end = .;
   } > m_sram
-
+  
   .stack :
   {
+    __stack_bottom = .;
     . = ALIGN(8);
     . += STACK_SIZE;
+    __stack_top = .;
   } > m_sram
-
-  __stack_top = ORIGIN(m_sram) + LENGTH(m_sram);
-  __stack_limit = __stack_top - STACK_SIZE;
-
 }

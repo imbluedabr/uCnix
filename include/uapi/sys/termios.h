@@ -11,3 +11,8 @@ struct termios {
 #define ICANON (1 << 0)
 #define ECHO (1 << 1)
 
+#define IOCTL_TTY_SETMODE 0
+#define IOCTL_TTY_GETMODE 1
+
+
+

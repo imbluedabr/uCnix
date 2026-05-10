@@ -6,6 +6,7 @@
 #include <kernel/interrupt.h>
 #include <kernel/lock.h>
 #include <kernel/proc.h>
+#include <kernel/panic.h>
 #include <lib/stdlib.h>
 
 static struct inode* free_list;
@@ -93,11 +94,18 @@ struct file* file_alloc()
     if (file_table_free_top == 0) {
         return NULL;
     }
-    return &vfs_file_table[file_table_free[--file_table_free_top]];
+    struct file* f = &vfs_file_table[file_table_free[--file_table_free_top]];
+    f->refcount = 1;
+    return f;
 }
 
 void file_free(struct file* f)
 {
+    if (f->refcount > 1) {
+        f->refcount--;
+        return;
+    }
+    f->refcount = 0;
     if (file_table_free_top == VFS_MAXFILES)
     {   //very bad, means memory was leaked
         return;
@@ -163,6 +171,9 @@ struct inode* vfs_walk_path(const char* path)
     } else {
         current_dir = current_process->cwd;
     }
+    if (!current_dir) {
+        thread_panic("vfs: cwd not set!");
+    }
     strlcpy(path_cpy + path_idx, path + path_idx, FS_PATH_LEN);
 
     while (path[path_idx]) {
@@ -186,6 +197,16 @@ struct inode* vfs_walk_path(const char* path)
     return current_dir;
 }
 
+int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags)
+{
+    struct file_ops* fops = get_filesystem(filesystemtype);
+    if (!fops) return -ENODEV;
+    mutex_lock(&vfs_cache_lock);
+    int status = fops->mount(&vfs_root, devno, mountflags);
+    mutex_unlock(&vfs_cache_lock);
+    return status;
+}
+
 int check_access(cred_t credentials, struct permissions* perm, int mode)
 {
     return 1;
@@ -193,44 +214,75 @@ int check_access(cred_t credentials, struct permissions* perm, int mode)
 
 ssize_t vfs_read(int fd, void* buffer, size_t count)
 {
+    ssize_t n;
     mutex_lock(&vfs_cache_lock);
     struct file* f = proc_fd_get(current_process, fd);
-    if (!f) return -EBADF;
-    if (!(f->flags & O_RDONLY)) return -EBADF;
+    if (!f || !(f->flags & O_RDONLY)) {
+        n = -EBADF;
+        goto exit;
+    }
 
-    ssize_t n = f->i->fs->fops->read(f, buffer, count);
-    f->offset += n;
+    if (f->i->perm.mode & S_IFDIR) {
+        n = -EISDIR;
+        goto exit;
+    }
+
+    n = f->i->fs->fops->read(f, buffer, count);
+    if (n > 0) f->offset += n;
+
+exit:
     mutex_unlock(&vfs_cache_lock);
     return n;
 }
 
 ssize_t vfs_write(int fd, const void* buffer, size_t count)
 {
+    ssize_t n;
     mutex_lock(&vfs_cache_lock);
     struct file* f = proc_fd_get(current_process, fd);
-    if (!f) return -EBADF;
-    if (!(f->flags & O_WRONLY)) return -EBADF;
+    if (!f || !(f->flags & O_WRONLY)) {
+        n = -EBADF;
+        goto exit;
+    }
 
-    ssize_t n = f->i->fs->fops->write(f, buffer, count);
-    f->offset += n;
+    if (f->i->perm.mode & S_IFDIR) {
+        n = -EISDIR;
+        goto exit;
+    }
+
+    n = f->i->fs->fops->write(f, buffer, count);
+    if (n > 0) f->offset += n;
+
+exit:
     mutex_unlock(&vfs_cache_lock);
     return n;
-
 }
 
 int vfs_open(const char* path, int flags)
 {
+    mutex_lock(&vfs_cache_lock);
+    int fd;
+
     struct inode* i = vfs_walk_path(path);
-    if (!i) return -ENOENT;
+    if (!i) {
+        fd = -ENOENT;
+        goto exit;
+    }
 
     struct file* f = file_alloc();
-    if (!f) return -ENFILE;
+    if (!f) {
+        fd = -ENFILE;
+        goto exit;
+    }
 
     f->flags = flags;
     f->i = i;
     f->offset = 0;
+    fd = proc_fd_add(current_process, f);
 
-    return proc_fd_add(current_process, f);
+exit:
+    mutex_unlock(&vfs_cache_lock);
+    return fd;
 }
 
 int vfs_close(int fd)
@@ -286,6 +338,31 @@ int vfs_ftruncate(int fd, off_t lenght)
 int vfs_chdir(const char* path)
 {
 
+}
+
+ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count)
+{
+    ssize_t n;
+    mutex_lock(&vfs_cache_lock);
+    struct file* f = proc_fd_get(current_process, fd);
+    if (!f || !(f->flags & O_RDONLY)) {
+        n = -EBADF;
+        goto exit;
+    }
+
+    //check if it is a directory or nah
+    if (!(f->i->perm.mode & S_IFDIR)) {
+        n = -ENOTDIR;
+        goto exit;
+    }
+
+    n = f->i->fs->fops->readdir(f, buf, count);
+    if (n > 0) {
+        f->offset += n;
+    }
+exit:
+    mutex_unlock(&vfs_cache_lock);
+    return n;
 }
 
 int vfs_mkdir(const char* path, mode_t mode)

@@ -57,8 +57,9 @@ struct file_ops {
     off_t (*ftruncate)(struct file* f, off_t lenght);
 
     //inode operations
-    int (*mount)(struct inode* mountpoint, dev_t devno, const char* args);
+    int (*mount)(struct inode* mountpoint, dev_t devno, int mountflags);
     int (*umount)(struct superblock* fs);
+    int (*statfs)(struct superblock* fs);
     
     struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
     int (*remove)(struct inode* target);
@@ -71,6 +72,9 @@ struct file_ops {
 struct superblock {
     struct file_ops* fops;
     uint8_t fsid; //filesystem id, used by filesystems to ensure unique inode numbers
+    uint16_t block_size;
+    uint16_t block_count;
+    uint16_t block_used;
 };
 
 struct file {
@@ -85,10 +89,13 @@ struct inode* inode_alloc();
 void inode_free(struct inode* i);
 
 extern struct file vfs_file_table[VFS_MAXFILES];
+extern struct inode vfs_root;
 
 void vfs_init();
 int vfs_get_fsid();
 struct inode* vfs_walk_path(const char* path);
+int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags);
+
 
 ssize_t vfs_read(int fd, void* buffer, size_t count);
 ssize_t vfs_write(int fd, const void* buffer, size_t count);
@@ -104,6 +111,7 @@ int vfs_flock(int fd, int op);
 int vfs_fsync(int fd);
 int vfs_ftruncate(int fd, off_t lenght);
 int vfs_chdir(const char* path);
+ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count);
 int vfs_mkdir(const char* path, mode_t mode);
 int vfs_rmdir(const char* path);
 int vfs_rename(const char* oldpath, const char* newpath);
@@ -116,4 +124,4 @@ int vfs_fchown(int fd, uid_t owner, gid_t group);
 int vfs_sync();
 int vfs_mount(const char* source, const char* target, const char* filesystemtype, int mountflags);
 int vfs_umount(const char* target);
-
+int vfs_statfs(const char* path, struct statfs* buff);

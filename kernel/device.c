@@ -11,19 +11,20 @@ void device_init()
     }
 }
 
-struct device* device_create(dev_t* devno, uint8_t major, void* desc)
+struct device* device_create(dev_t* devno, uint8_t major, const void* desc)
 {
     struct device_driver* drv = driver_table[major];
     if (drv == NULL) {
         return NULL;
     }
-
-    uint8_t minor;
-    struct device* dev = drv->create(&minor, desc);
+    struct device* dev = drv->create((void*) desc);
     if (dev == NULL) {
         return NULL;
     }
-    *devno = MKDEV(major, minor);
+    dev->next = drv->instances;
+    drv->instances = dev;
+    dev->minor = drv->instance_count++;
+    *devno = MKDEV(major, dev->minor);
     return dev;
 }
 
@@ -66,6 +67,15 @@ struct io_request* device_peek_request(struct device* dev)
     return req;
 }
 
+void device_finish_request(struct device* dev, ssize_t bytes_transfered) //finish a device request obtained via peek
+{
+    struct io_request* req = device_peek_request(dev);
+    req->offset = bytes_transfered;
+    req->status = 1;
+    proc_unblock_process(waiter_pop(&req->waiter)->pid);
+    device_dequeue_request(dev);
+}
+
 ssize_t device_write(struct device* dev, void* buffer, size_t count, off_t offset) //blocking write to device
 {
     struct io_request req = {
@@ -80,7 +90,7 @@ ssize_t device_write(struct device* dev, void* buffer, size_t count, off_t offse
 
     proc_block();
 
-    return req.count;
+    return req.offset;
 }
 
 ssize_t device_read(struct device* dev, void* buffer, size_t count, off_t offset)
@@ -97,7 +107,7 @@ ssize_t device_read(struct device* dev, void* buffer, size_t count, off_t offset
 
     proc_block();
     
-    return req.count;
+    return req.offset;
 }
 
 //device lookup is O(n) because devices are kept as linked lists

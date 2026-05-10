@@ -32,7 +32,7 @@ struct usart_device {
 };
 
 void usart_init();
-struct device* usart_create(uint8_t* minor, void* desc);
+struct device* usart_create(void* desc);
 int usart_destroy(struct device* dev);
 int usart_ioctl(struct device* dev, int op, void* arg);
 int usart_readb(struct device* dev);

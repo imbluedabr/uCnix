@@ -47,7 +47,7 @@ void hd44xxx_init();
 int hd44xxx_push_cmd(struct hd44xxx_device* disp, uint8_t rs, uint8_t val);
 
 //create a tty instance, args is a tty_hardware_interface pointer to the tty
-struct device* hd44xxx_create(uint8_t* minor, void* args);
+struct device* hd44xxx_create(void* args);
 
 //destroy a tty instance
 int hd44xxx_destroy(struct device* dev);

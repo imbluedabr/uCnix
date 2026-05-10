@@ -18,6 +18,7 @@ typedef enum {
     SYS_CHDIR,
     SYS_MKDIR,
     SYS_RMDIR,
+    SYS_READDIR,
     SYS_CHROOT,
     SYS_RENAME,
     SYS_LINK,

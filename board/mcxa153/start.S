@@ -48,7 +48,7 @@ reset_handler:
     str     r1, [r0]
     ldr     r2, [r1]
     msr     msp, r2             /* why the fuck are we setting the msp again?? its automaticly set by the hardware?? */
-    ldr     r0, =__stack_limit
+    ldr     r0, =__stack_bottom
     msr     msplim, r0
 
 
@@ -76,7 +76,7 @@ reset_handler:
 
 
 /* stack initialization */
-    ldr     r1, =__stack_limit
+    ldr     r1, =__stack_bottom
     ldr     r2, =__stack_top
 .LC4:
     cmp     r1, r2

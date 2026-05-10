@@ -68,6 +68,7 @@ struct device_driver hd44xxx_driver = {
     .writeb = hd44xxx_writeb,
     .update = hd44xxx_update,
     .instances = NULL,
+    .name = "lcd",
     .instance_count = 0
 };
 
@@ -98,7 +99,7 @@ static int cmd_set_ddram(struct hd44xxx_device* disp, uint8_t val)
 }
 
 
-struct device* hd44xxx_create(uint8_t* minor, void* args)
+struct device* hd44xxx_create(void* args)
 {
     struct hd44xxx_device* display = kzalloc(sizeof(struct hd44xxx_device));
     if (display == NULL) {
@@ -108,10 +109,6 @@ struct device* hd44xxx_create(uint8_t* minor, void* args)
     display->base.driver = &hd44xxx_driver;
     display->base.impl = desc->type;
 
-    display->base.next = hd44xxx_driver.instances;
-    hd44xxx_driver.instances = &display->base;
-
-    *minor = hd44xxx_driver.instance_count++;
     port_init();
     disp_impl[desc->type].init(display, desc);
 
