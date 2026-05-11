@@ -39,7 +39,6 @@ void kernel_init_process()
 {
     kinfo("vfs: mounting rootfs on dev (%d,%d) of type (%s) on /\n", MAJOR(ROOTFS_DEVNO), MINOR(ROOTFS_DEVNO), ROOTFS_TYPE);
 
-    
     int status = vfs_mount_root(ROOTFS_DEVNO, ROOTFS_TYPE, 0);
     if (status < 0) {
         kerr("vfs: rootfs mount failed! errno=%d\n", status);
@@ -47,11 +46,12 @@ void kernel_init_process()
     }
     struct superblock* fs = vfs_root.fs;
     kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
-
+    
     struct memstat buff;
     heap_stat(&buff);
-
     kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
+
+
 
 abort:
     kinfo("halting kernel...\n");

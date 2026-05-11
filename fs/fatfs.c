@@ -127,12 +127,13 @@ off_t fatfs_ftruncate(struct file* f, off_t lenght)
 }
 
 //inode operations
-int fatfs_mount(struct inode* mountpoint, dev_t devno, int mountflags) {
+[[gnu::stack_protect]] int fatfs_mount(struct inode* mountpoint, dev_t devno, int mountflags) {
     struct fatfs_superblock* fs = kzalloc(sizeof(struct fatfs_superblock));
     if (!fs) {
         return -ENOMEM;
     }
     
+
     fs->base.fsid = vfs_get_fsid();
     fs->base.fops = (struct file_ops*) &fatfs_file_ops;
     fs->devno = devno;
@@ -140,15 +141,16 @@ int fatfs_mount(struct inode* mountpoint, dev_t devno, int mountflags) {
     if (fs->dev == NULL) {
         return -ENODEV;
     }
+    
 
     mountpoint->fatfs.fat_index = 0;
     mountpoint->perm.mode = S_IFMNT;
     mountpoint->file = fatfs_calc_ino(fs, 0);
     mountpoint->fs = &fs->base;
-
-    uint16_t dev_bsize;
+    
+    size_t dev_bsize;
     fs->dev->driver->ioctl(fs->dev, IOCTL_BLK_GETSECSZ, &dev_bsize);
-
+    
     device_read(fs->dev, fs->scratch_buff.raw, 1, 0); //block 0 contains the disk descriptor
     memcpy(fs->fat_cache, fs->scratch_buff.desc.fat_table, 256);
     

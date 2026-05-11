@@ -94,6 +94,7 @@ extern struct inode vfs_root;
 void vfs_init();
 int vfs_get_fsid();
 struct inode* vfs_walk_path(const char* path);
+struct file_ops* get_filesystem(const char* name);
 int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags);
 
 
