@@ -108,6 +108,10 @@ ifeq ($(CONFIG_DEBUG), y)
 	CFLAGS += -D__DEBUG__ -g -fverbose-asm
 endif
 
+ifeq ($(CONFIG_STACK_PROT), y)
+	CFLAGS += -fstack-protector-strong
+endif
+
 CFLAGS += -Os
 LDFLAGS += -Os
 ASFLAGS += -fno-lto
@@ -140,6 +144,7 @@ $(MN_FILE): $(OBJS)
 
 image: $(MN_FILE)
 	$(OBJCOPY) -O binary $(MN_FILE) image.bin
+	$(TOOLCHAIN)-readelf -S $(MN_FILE)
 
 tools:
 	$(MAKE) -C $(ROOT)/tools all

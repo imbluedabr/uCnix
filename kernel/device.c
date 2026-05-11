@@ -119,9 +119,8 @@ struct device* device_lookup(dev_t devno)
     }
 
     struct device* dev = drv->instances;
-    int count = 0;
     while(dev) {
-        if (count == MINOR(devno)) {
+        if (dev->minor == MINOR(devno)) {
             return dev;
         }
         dev = dev->next;

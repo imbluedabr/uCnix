@@ -43,12 +43,17 @@ void kernel_init_process()
     int status = vfs_mount_root(ROOTFS_DEVNO, ROOTFS_TYPE, 0);
     if (status < 0) {
         kerr("vfs: rootfs mount failed! errno=%d\n", status);
-    } else {
-        struct superblock* fs = vfs_root.fs;
-        kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
+        goto abort;
     }
-    
+    struct superblock* fs = vfs_root.fs;
+    kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
 
+    struct memstat buff;
+    heap_stat(&buff);
+
+    kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
+
+abort:
     kinfo("halting kernel...\n");
     proc_stop_scheduling();
     enable_interrupts(0); //hack
@@ -60,7 +65,7 @@ void kernel_pre_init()
 {
     system_init(); //initialize cache, flash and other basic board specific stuff
     interrupt_init(); //load the ram vector table
-    init_heap(__heap_start, 2048); //initialize the heap
+    heap_init(__heap_start, 2048); //initialize the heap
     time_init();
     device_init();
     proc_init();

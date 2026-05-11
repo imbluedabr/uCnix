@@ -9,13 +9,23 @@ struct block {
     uint8_t next;
 };
 
+struct memstat {
+    uint16_t blocks_used;
+    uint16_t blocks_total;
+    uint16_t bytes_used;
+    uint16_t bytes_total;
+    uint16_t fragmentation;
+};
+
 #define BLOCK_ARRAY_LEN 64
 #define BLOCK_NIL 255
 
 extern uint8_t __heap_start[];
 
 //init heap for kmalloc
-void init_heap(void* base, int size);
+void heap_init(void* base, int size);
+
+void heap_stat(struct memstat* buff);
 
 //allocate a contiguous piece of memory in sram, returns NULL on failure
 void* kmalloc(int size);

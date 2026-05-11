@@ -36,7 +36,7 @@ void put_block(struct block* b)
     unused_blocks[unused_blocks_top++] = idx;
 }
 
-void init_heap(void* base, int size)
+void heap_init(void* base, int size)
 {
     mutex_init(&alloc_mut);
     block_base = base;
@@ -47,6 +47,33 @@ void init_heap(void* base, int size)
     unused_blocks_top = 0;
     for (int i = 1; i < BLOCK_ARRAY_LEN; i++) {
         unused_blocks[unused_blocks_top++] = i;
+    }
+}
+
+void heap_stat(struct memstat* buff)
+{
+    struct block* current = get_block_addr(0);
+    bool prev_occupied = true;
+    memset(buff, 0, sizeof(struct memstat));
+
+    while (current) {
+
+        if (prev_occupied != current->occupied) {
+            buff->fragmentation++;
+        }
+        prev_occupied = current->occupied;
+
+        if (current->occupied) {
+            buff->blocks_used++;
+            buff->bytes_used += current->size;
+        }
+        
+        buff->blocks_total++;
+        buff->bytes_total += current->size;
+        if (current->next == BLOCK_NIL) {
+            return;
+        }
+        current = get_block_addr(current->next);
     }
 }
 
