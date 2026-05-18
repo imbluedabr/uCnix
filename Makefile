@@ -31,9 +31,9 @@ endif
 # the filesystems
 FS_SELECT = fs/vfs.c
 
-ifeq ($(CONFIG_FS_FATFS), y)
-FS_SELECT += fs/fatfs.c
-$(shell echo "#define FS_FATFS" >> $(SETTINGS_FILE))
+ifeq ($(CONFIG_FS_UCFS), y)
+FS_SELECT += fs/ucfs.c
+$(shell echo "#define FS_UCFS" >> $(SETTINGS_FILE))
 endif
 
 DEV_SELECT = 

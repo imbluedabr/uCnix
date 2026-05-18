@@ -14,8 +14,12 @@
 struct superblock;
 struct file;
 struct dentry;
+struct file_ops;
 
-#define FS_GET_INO_OFF(ID) (ID << 16)
+//make a unique number
+#define FS_MAKE_UNO(ID, NO) ((ID << 24) + NO)
+//retrieve inode number
+#define FS_GET_INO(INO) (INO & 0xFFFFFF)
 
 struct permissions {
     uid_t user;
@@ -23,55 +27,38 @@ struct permissions {
     mode_t mode;
 };
 
-struct devfs_inode {
-    dev_t devno;
-};
-
-struct fatfs_inode {
-    uint8_t fat_index;
-};
-
 struct inode {
-    struct superblock* fs;      //this is the filesystem that the inode is part of
-    struct inode* next;         //linked list of free inodes or cached inodes
-    char name[FS_INAME_LEN + 1];//the name of the file
-    uint8_t refcount;           //the amount of references exist to this inode, this includes file descriptors and dentries
-    ino_t dir;                  //the parent directory of this inode
-    ino_t file;                 //the inum of this inode
-    size_t size;
+    struct filesystem* fs;
+    struct inode* next;
+    ino_t ino;
     struct permissions perm;
-    time_t mtime;
+    uint32_t size : 24;
+    uint32_t refcount : 8;
     union {
-        struct devfs_inode devfs;
-        struct fatfs_inode fatfs;
+        struct { //filesystem specific metadata
+            dev_t devno;
+        } devfs;
+        struct {
+            uint8_t indirect_block;
+        } ucfs;
     };
 };
 
-//file operations
-struct file_ops {
-    //file descriptor ops
-    ssize_t (*read)(struct file* f, char* buff, int count);
-    ssize_t (*write)(struct file* f, const char* buff, int count);
-    int (*readdir)(struct file* f, struct dirent* buff, int count);
-    off_t (*lseek)(struct file* f, off_t offset, int whence);
-    off_t (*ftruncate)(struct file* f, off_t lenght);
-
-    //inode operations
-    int (*mount)(struct inode* mountpoint, dev_t devno, int mountflags);
-    int (*umount)(struct superblock* fs);
-    int (*statfs)(struct superblock* fs);
-    
-    struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
-    int (*remove)(struct inode* target);
-    int (*close)(struct inode* target);
-
-    //filesystem lookup function
-    struct inode* (*lookupn)(struct inode* dir, const char* name); //lookup an inode in a dir
+struct dentry {
+    char name[FS_INAME_LEN + 2];
+    ino_t parent_ino;
+    ino_t ino;
 };
 
-struct superblock {
-    struct file_ops* fops;
+struct mount {
+    struct inode* mountpoint;
+    struct inode* root;
+};
+
+struct filesystem {
+    const struct file_ops* fops;
     uint8_t fsid; //filesystem id, used by filesystems to ensure unique inode numbers
+    dev_t devno;
     uint16_t block_size;
     uint16_t block_count;
     uint16_t block_used;
@@ -83,6 +70,32 @@ struct file {
     uint8_t refcount : 4;
     uint8_t flags : 4;
 };
+
+//file operations
+struct file_ops {
+    //file descriptor ops
+    ssize_t (*read)(struct file* f, char* buff, int count);
+    ssize_t (*write)(struct file* f, const char* buff, int count);
+    int (*readdir)(struct file* f, struct dirent* buff, int count);
+    off_t (*lseek)(struct file* f, off_t offset, int whence);
+    int (*fstat)(struct file* f, struct stat* statbuf);
+    off_t (*ftruncate)(struct file* f, off_t lenght);
+
+    //inode operations
+    int (*mount)(struct inode* mountpoint, dev_t devno, int mountflags);
+    int (*umount)(struct filesystem* fs);
+    int (*statfs)(struct filesystem* fs);
+    
+    struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
+    int (*remove)(struct inode* target);
+
+    //filesystem lookup function
+    ino_t (*lookup)(struct inode* dir, const char* name); //lookup an inode inside a dir
+    struct inode* (*read_i)(struct filesystem* fs, ino_t ino); //read an inode
+    int (*write_i)(struct inode* target); //write an inode
+};
+
+
 
 extern mutex_t vfs_cache_lock;
 struct inode* inode_alloc();

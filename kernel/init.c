@@ -44,7 +44,7 @@ void kernel_init_process()
         kerr("vfs: rootfs mount failed! errno=%d\n", status);
         goto abort;
     }
-    struct superblock* fs = vfs_root.fs;
+    struct filesystem* fs = vfs_root.fs;
     kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
     
     struct memstat buff;

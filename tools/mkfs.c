@@ -1,48 +1,43 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
 #include <sys/types.h>
 #include <dirent.h>
 
+uint8_t* fs_buffer;
 
-struct fatfs_disk_descriptor {
-    uint8_t fat_table[256];
-    uint16_t block_size;
-    uint16_t block_count;
-    uint16_t block_used;
+struct ucfs_superblock {
+    char magic[8];
+    uint16_t block_size; //in bytes
+    uint16_t block_count; //amount of data blocks
+    uint16_t block_used; //amount of data blocks used
+    uint16_t inode_table_size; //in bytes
+    uint32_t block_bitmap[8]; //bitmap of used blocks
 } disk;
 
 
-#define FAT_FREE 255 //free fat block
-#define FAT_END 254  //end of fat chain
-#define FAT_BBLK 253 //bad block
-#define FAT_DIR_LEN (disk.block_size/sizeof(struct fatfs_file))
+#define FS_IFREG     (0b0001 << 12)
+#define FS_IFDIR     (0b0010 << 12)
+#define FS_IFDEV     (0b0011 << 12)
+#define FS_IFMNT     (0b0100 << 12)
+#define FS_IFSOCK    (0b0101 << 12)
 
-#define FAT_DATA_START disk.block_size
+#define FS_ISUID     (0b100 << 9)
+#define FS_ISGID     (0b010 << 9)
 
-#define CALC_SADRES(FAT_IDX) (disk.block_size + FAT_IDX*disk.block_size)
-
-#define FAT_IFREG     (0b0001 << 12)
-#define FAT_IFDIR     (0b0010 << 12)
-#define FAT_IFDEV     (0b0011 << 12)
-#define FAT_IFMNT     (0b0100 << 12)
-#define FAT_IFSOCK    (0b0101 << 12)
-
-#define FAT_ISUID     (0b100 << 9)
-#define FAT_ISGID     (0b010 << 9)
-
-#define FAT_IRUSR     (0b100 << 6)
-#define FAT_IWUSR     (0b010 << 6)
-#define FAT_IXUSR     (0b001 << 6)
-#define FAT_IRGRP     (0b100 << 3)
-#define FAT_IWGRP     (0b010 << 3)
-#define FAT_IXGRP     (0b001 << 3)
-#define FAT_IROTH     (0b100 << 0)
-#define FAT_IWOTH     (0b010 << 0)
-#define FAT_IXOTH     (0b001 << 0)
+#define FS_IRUSR     (0b100 << 6)
+#define FS_IWUSR     (0b010 << 6)
+#define FS_IXUSR     (0b001 << 6)
+#define FS_IRGRP     (0b100 << 3)
+#define FS_IWGRP     (0b010 << 3)
+#define FS_IXGRP     (0b001 << 3)
+#define FS_IROTH     (0b100 << 0)
+#define FS_IWOTH     (0b010 << 0)
+#define FS_IXOTH     (0b001 << 0)
 
 struct permissions {
     uint8_t user;
@@ -51,112 +46,123 @@ struct permissions {
 };
 
 
-struct fatfs_file {
-    char name[10 + 1];
-    uint8_t fat_index;
+struct ucfs_inode {
+    uint32_t size;
     struct permissions perm;
-    uint32_t time;
-    uint16_t size;
+    uint32_t mtime;
+    uint8_t nlinks;
+    uint8_t indirect_block; //indirect block points directly to a dir block if it is a dir
 };
 
-uint8_t* fs_buffer;
+struct ucfs_file {
+    char name[11];
+    uint8_t ino;
+};
 
-uint8_t alloc_sector()
+
+void disk_init()
+{
+    strcpy(disk.magic, "ucfs");
+    for (int i = 0; i < 8; i++) {
+        disk.block_bitmap[i] = 0xFFFFFFFF;
+    }
+    disk.block_size = 512;
+    disk.block_count = 16;
+    disk.block_used = 0;
+    disk.inode_table_size = 4096;
+    
+    int total_blocks = (disk.inode_table_size/disk.block_size) + disk.block_count + 1;
+    fs_buffer = malloc(total_blocks*disk.block_size);
+}
+
+void disk_sync()
+{
+    memcpy(fs_buffer + 512, &disk, sizeof(struct ucfs_superblock));
+}
+
+uint8_t block_alloc()
 {
     for (int i = 0; i < 256; i++) {
-        if (disk.fat_table[i] == FAT_BBLK) continue;;
-        if (disk.fat_table[i] == FAT_FREE) {
+        int a = i >> 4;
+        int b = i & 0b1111;
+        if (!(disk.block_bitmap[a] & (1 << b))) {
+            disk.block_bitmap[a] |= (1 << b);
             disk.block_used++;
             return i;
         }
     }
-    return FAT_BBLK;
+    return 255;
 }
 
-void fat_init()
+uint8_t inode_alloc()
 {
-    memset(disk.fat_table, FAT_FREE, disk.block_count);
-    memset(disk.fat_table + disk.block_count, FAT_BBLK, 256 - disk.block_count);
-    disk.fat_table[0] = FAT_END;
-    disk.block_used = 2; //block 0(disk descriptor) and block 1(root dir) are used
+    struct ucfs_inode* itable = (struct ucfs_inode*)(fs_buffer + 1024);
+    for (int ino = 0; ino < 255; ino++) {
+        struct ucfs_inode* i = &itable[ino];
+
+        if (i->nlinks == 0) {
+            return ino;
+        }
+    }
+    return 255;
 }
 
-void fat_sync()
+struct ucfs_inode* inode_read(uint8_t ino)
 {
-    memcpy(fs_buffer, &disk, sizeof(disk));
+    return &((struct ucfs_inode*)(fs_buffer + 1024))[ino];
 }
 
-//allocate a new file and add it to a directory
-struct fatfs_file* create_file(uint8_t dir_index, const char* name, struct permissions perm)
+struct ucfs_file* ucfs_mklink(struct ucfs_file* dir, uint8_t ino, const char* name)
 {
-    struct fatfs_file* dir = (struct fatfs_file*) &fs_buffer[CALC_SADRES(dir_index)];
-    for (int i = 0; i < FAT_DIR_LEN; i++) {
-        struct fatfs_file* entry = &dir[i];
-        if (entry->fat_index == FAT_FREE) {
-            strncpy(entry->name, name, 10);
-            uint8_t fat_index = alloc_sector();
-            if (fat_index == FAT_BBLK) printf("error!\n");
-            entry->fat_index = fat_index;
-            entry->perm = perm;
-            entry->time = 0;
-            disk.fat_table[fat_index] = FAT_END;
-            return entry;
+    struct ucfs_file* entries = (struct ucfs_file*)(fs_buffer + inode_read(dir->ino)->indirect_block*512 + 6*512);
+
+    for (int i = 0; i < 42; i++) {
+        if (entries[i].ino == 255) {
+
+            entries[i].ino = ino;
+            strcpy(entries[i].name, name);
+            inode_read(ino)->nlinks++;
+
+            return &entries[i];
         }
     }
     return NULL;
 }
 
-
-//initialize a directory with empty entries
-void initialize_dir(uint8_t fat_index)
+struct ucfs_file* ucfs_mkfile(struct ucfs_file* dir, const char* name, struct permissions perm)
 {
-    struct fatfs_file* dir = (struct fatfs_file*) &fs_buffer[CALC_SADRES(fat_index)];
-    for (int i = 0; i < FAT_DIR_LEN; i++) {
-        struct fatfs_file* entry = &dir[i];
-        memset(entry, 0, sizeof(struct fatfs_file));
-        entry->fat_index = FAT_FREE;
+    uint8_t ino = inode_alloc();
+    struct ucfs_inode* i = inode_read(ino);
+    i->perm = perm;
+    i->size = 0;
+    i->nlinks = 0;
+    i->mtime = 0;
+    i->indirect_block = block_alloc();
+
+    return ucfs_mklink(dir, ino, name);
+}
+
+void ucfs_initdir(struct ucfs_file* dir)
+{
+    struct ucfs_inode* i = inode_read(dir->ino);
+    struct ucfs_file* entries = (struct ucfs_file*)(fs_buffer + i->indirect_block*512 + 6*512);
+
+    for (int i = 0; i < 42; i++) {
+        entries[i].ino = 255;
     }
 }
 
-void list_dir(uint8_t fat_index)
+void ucfs_initfile(struct ucfs_file* file)
 {
-    struct fatfs_file* dir = (struct fatfs_file*) &fs_buffer[CALC_SADRES(fat_index)];
-    for (int i = 0; i < FAT_DIR_LEN; i++) {
-        struct fatfs_file* entry = &dir[i];
-        if (entry->fat_index != FAT_FREE) {
-            printf("%o\t%d\t%d\t%d\t%s\t%d\n", entry->perm.mode, entry->perm.user, entry->perm.group, entry->size, entry->name, entry->fat_index);
-            if (entry->perm.mode & FAT_IFDIR) {
-                printf("entering dir %s\n", entry->name);
-                list_dir(entry->fat_index);
-                printf("leaving directory %s\n", entry->name);
-            }
+    struct ucfs_inode* i = inode_read(file->ino);
+    uint8_t* indirect_table = fs->buffer + i->indirect_block*512 + 6*512;
 
-        }
+    for (int i = 0; i < 256; i++) {
+        indirect_table[i] = 255;
     }
 }
 
-int write_file(struct fatfs_file* file, uint8_t* buffer, int count)
-{
-    int bytes_written = 0;
-    uint8_t fat_index = file->fat_index;
-    int to_read = count & (disk.block_size - 1);
-
-    while (to_read > 0) {
-        uint8_t* sector = &fs_buffer[CALC_SADRES(fat_index)];
-        memcpy(sector, buffer, to_read);
-        to_read = (count - bytes_written) & (disk.block_size - 1);
-        bytes_written += to_read;
-
-        uint8_t new_fat_index = alloc_sector();
-        if (new_fat_index == FAT_BBLK) return -1;
-        disk.fat_table[fat_index] = new_fat_index;
-        fat_index = new_fat_index;
-    }
-    disk.fat_table[fat_index] = FAT_END;
-    file->size = count;
-    return 0;
-}
-
+/*
 void generate_fs(const char* path, uint8_t root_dir)
 {
     DIR *dir;
@@ -182,27 +188,18 @@ void generate_fs(const char* path, uint8_t root_dir)
     }
     closedir(dir);
 }
+*/
 
 int main(int argc, char** argv)
 {
-    disk.block_count = 32;
-    disk.block_size = 512;
-    fs_buffer = calloc(disk.block_count, disk.block_size);
-    fat_init();
-    initialize_dir(0);
-    if (argc != 2) {
-        printf("usage: mkfs path/to/staging\n");
-        return -1;
-    }
-    generate_fs(argv[1], 0);
-    fat_sync();
-    
-    printf("fs statistics:\nblock count: %d\nblock size %d\nblocks used %d\n", disk.block_count, disk.block_size, disk.block_used);
-    list_dir(0);
+    disk_init();
 
+    
+
+    disk_sync();
     int imgfd = open("rootfs.bin", O_CREAT | O_RDWR, S_IFREG | S_IRUSR | S_IWUSR );
 
-    write(imgfd, fs_buffer, disk.block_count*disk.block_size);
+    write(imgfd, fs_buffer, (disk.block_count + 2)*disk.block_size);
     
     close(imgfd);
     return 0;

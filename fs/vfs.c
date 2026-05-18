@@ -1,7 +1,8 @@
 #include <fs/vfs.h>
 #include <uapi/sys/errno.h>
 #include <uapi/sys/fcntl.h>
-#include <fs/fatfs.h>
+#include <fs/devfs.h>
+#include <fs/ucfs.h>
 #include <kernel/alloc.h>
 #include <kernel/interrupt.h>
 #include <kernel/lock.h>
@@ -13,6 +14,8 @@ static struct inode* free_list;
 static struct inode* cache_list;
 static uint8_t cache_list_size;
 static uint8_t free_list_size;
+
+//you must hold this lock when you use an inode
 mutex_t vfs_cache_lock;
 
 #define CACHE_FLUSH_THRESHOLD 16
@@ -52,11 +55,23 @@ void inode_free(struct inode* i)
         mutex_unlock(&vfs_cache_lock);
         return;
     }
-
+    
     if (cache_list_size > CACHE_FLUSH_THRESHOLD) {
         //TODO: implement eviction policy
     }
     mutex_unlock(&vfs_cache_lock);
+}
+
+#define DENTRY_CACHE_LEN 16
+struct dentry dentry_cache[DENTRY_CACHE_LEN];
+uint8_t dentry_cache_index;
+mutex_t vfs_dentry_lock;
+
+struct dentry* dentry_alloc()
+{
+    struct dentry* d = &dentry_cache[dentry_cache_index];
+    dentry_cache_index = (dentry_cache_index + 1) & (DENTRY_CACHE_LEN-1);
+    return d;
 }
 
 int vfs_get_fsid()
@@ -66,11 +81,11 @@ int vfs_get_fsid()
 }
 
 const struct file_ops* fs_table[4] = {
-    &fatfs_file_ops
+    &ucfs_file_ops
 };
 
 const char* fs_name_table[4] = {
-    "fatfs"
+    "ucfs"
 };
 
 struct inode vfs_root;
@@ -79,15 +94,7 @@ struct file vfs_file_table[VFS_MAXFILES];
 uint8_t file_table_free[VFS_MAXFILES];
 uint8_t file_table_free_top;
 
-void vfs_init()
-{
-    free_list = NULL;
-    cache_list = NULL;
-    for (int i = 0; i < VFS_MAXFILES; i++) {
-        file_table_free[file_table_free_top++] = i;
-    }
-}
-
+mutex_t vfs_file_lock;
 
 struct file* file_alloc()
 {
@@ -101,15 +108,20 @@ struct file* file_alloc()
 
 void file_free(struct file* f)
 {
+    mutex_lock(&vfs_file_lock);
     if (f->refcount > 1) {
         f->refcount--;
+        mutex_unlock(&vfs_file_lock);
         return;
     }
     f->refcount = 0;
+    mutex_unlock(&vfs_file_lock);
+    
     if (file_table_free_top == VFS_MAXFILES)
     {   //very bad, means memory was leaked
-        return;
+        thread_panic("vfs: memory leaked in file_free()");
     }
+
     file_table_free[file_table_free_top++] = f - vfs_file_table;
 }
 
@@ -123,53 +135,73 @@ struct file_ops* get_filesystem(const char* name)
     return NULL;
 }
 
-//this assumus that a lock has been achieved prior to calling
-struct inode* vfs_lookup(struct inode* dir, char* name)
+
+
+void vfs_init()
+{
+    free_list = NULL;
+    cache_list = NULL;
+    dentry_cache_index = 0;
+    for (int i = 0; i < VFS_MAXFILES; i++) {
+        file_table_free[file_table_free_top++] = i;
+    }
+}
+
+//lookup an inode using a name and parent directory inode
+ino_t vfs_read_dentry(struct inode* dir, const char* name)
+{
+    for (int i = 0; i < DENTRY_CACHE_LEN; i++) {
+        struct dentry* d = &dentry_cache[i];
+
+        if (strncmp(d->name, name, FS_INAME_LEN) == 0 && d->parent_ino == dir->ino) {
+            return d->ino;
+        }
+    }
+    ino_t new_ino = dir->fs->fops->lookup(dir, name);
+    mutex_lock(&vfs_dentry_lock);
+    struct dentry* d = dentry_alloc();
+    d->ino = new_ino;
+    d->parent_ino = dir->ino;
+    strlcpy(d->name, name, FS_INAME_LEN);
+    mutex_unlock(&vfs_dentry_lock);
+
+    return new_ino;
+}
+
+struct inode* vfs_read_inode(struct filesystem* fs, ino_t ino)
 {
     struct inode* current = cache_list;
-    
-    if (strncmp(name, ".", FS_INAME_LEN) == 0 || *name == '\0') {
-        return dir;
-    }
-    if (strncmp(name, "..", FS_INAME_LEN) == 0) { //find the parent inode
-        while (current) {
-            if (current->file == dir->dir) {
-                current->refcount++;
-                return current;
-            }
-            current = current->next;
-        }
-        //not in cache so do lookup
-        return dir->fs->fops->lookupn(dir, name);
-    }
+    mutex_lock(&vfs_cache_lock);
 
     while (current) {
-        if (strncmp(current->name, name, FS_INAME_LEN) == 0 && current->dir == dir->dir) {
+        if (current->ino == ino) {
             current->refcount++;
             return current;
         }
         current = current->next;
     }
+    mutex_unlock(&vfs_cache_lock);
     
-    return dir->fs->fops->lookupn(dir, name);
+    return fs->fops->read_i(fs, ino);
 }
-
 
 struct inode* vfs_walk_path(const char* path)
 {
-    struct inode* current_dir;
     int path_idx = 0;
     char path_cpy[FS_PATH_LEN+1];
     char* current_word = path_cpy;
 
-    mutex_lock(&vfs_cache_lock);
+    struct inode* current_dir;
     
     //absolute path
     if (*path == '/') {
         current_dir = &vfs_root;
         path_idx++;
     } else {
+        mutex_lock(&vfs_cache_lock);
         current_dir = current_process->cwd;
+        current_process->cwd->refcount++;
+        mutex_lock(&vfs_cache_lock);
     }
     if (!current_dir) {
         thread_panic("vfs: cwd not set!");
@@ -179,13 +211,13 @@ struct inode* vfs_walk_path(const char* path)
     while (path[path_idx]) {
         if (path[path_idx] == '/') {
             path_cpy[path_idx] = '\0';
-            
-            struct inode* next = vfs_lookup(current_dir, current_word);
+
+            ino_t ino = vfs_read_dentry(current_dir, current_word);
+            struct inode* next = vfs_read_inode(current_dir->fs, ino);
             if (!next) {
                 inode_free(current_dir);
                 return NULL;
             }
-
             inode_free(current_dir);
             current_dir = next;
             current_word = path_cpy + path_idx + 1;
@@ -193,7 +225,6 @@ struct inode* vfs_walk_path(const char* path)
         path_idx++;
     }
 
-    mutex_unlock(&vfs_cache_lock);
     return current_dir;
 }
 
@@ -201,9 +232,9 @@ int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags)
 {
     struct file_ops* fops = get_filesystem(filesystemtype);
     if (!fops) return -ENODEV;
-    mutex_lock(&vfs_cache_lock);
+
     int status = fops->mount(&vfs_root, devno, mountflags);
-    mutex_unlock(&vfs_cache_lock);
+
     return status;
 }
 
@@ -215,7 +246,6 @@ int check_access(cred_t credentials, struct permissions* perm, int mode)
 ssize_t vfs_read(int fd, void* buffer, size_t count)
 {
     ssize_t n;
-    mutex_lock(&vfs_cache_lock);
     struct file* f = proc_fd_get(current_process, fd);
     if (!f || !(f->flags & O_RDONLY)) {
         n = -EBADF;
@@ -228,71 +258,69 @@ ssize_t vfs_read(int fd, void* buffer, size_t count)
     }
 
     n = f->i->fs->fops->read(f, buffer, count);
+
+    mutex_lock(&vfs_file_lock);
     if (n > 0) f->offset += n;
+    mutex_unlock(&vfs_file_lock);
 
 exit:
-    mutex_unlock(&vfs_cache_lock);
     return n;
 }
 
 ssize_t vfs_write(int fd, const void* buffer, size_t count)
 {
-    ssize_t n;
-    mutex_lock(&vfs_cache_lock);
     struct file* f = proc_fd_get(current_process, fd);
     if (!f || !(f->flags & O_WRONLY)) {
-        n = -EBADF;
-        goto exit;
+        return -EBADF;
     }
 
     if (f->i->perm.mode & S_IFDIR) {
-        n = -EISDIR;
-        goto exit;
+        return -EISDIR;
     }
 
-    n = f->i->fs->fops->write(f, buffer, count);
+    ssize_t n = f->i->fs->fops->write(f, buffer, count);
+    mutex_lock(&vfs_file_lock);
     if (n > 0) f->offset += n;
-
-exit:
-    mutex_unlock(&vfs_cache_lock);
+    mutex_unlock(&vfs_file_lock);
     return n;
 }
 
 int vfs_open(const char* path, int flags)
 {
-    mutex_lock(&vfs_cache_lock);
-    int fd;
-
     struct inode* i = vfs_walk_path(path);
     if (!i) {
-        fd = -ENOENT;
-        goto exit;
+        return -ENOENT;
     }
 
     struct file* f = file_alloc();
     if (!f) {
-        fd = -ENFILE;
-        goto exit;
+        return -ENFILE;
     }
 
     f->flags = flags;
     f->i = i;
     f->offset = 0;
-    fd = proc_fd_add(current_process, f);
+    int fd = proc_fd_add(current_process, f);
 
-exit:
-    mutex_unlock(&vfs_cache_lock);
     return fd;
 }
 
 int vfs_close(int fd)
 {
-
+    struct file* f = proc_fd_get(current_process, fd);
+    inode_free(f->i);
+    f->i = NULL;
+    file_free(f);
+    proc_fd_free(current_process, fd); 
+    return 0;
 }
 
 int vfs_fstat(int fd, struct stat *statbuf)
 {
-
+    struct file* f = proc_fd_get(current_process, fd);
+    if (!f) return -EBADF;
+    
+    return f->i->fs->fops->fstat(f, statbuf);
 }
 
 off_t vfs_lseek(int fd, off_t offset, int whence)
@@ -312,7 +340,7 @@ int vfs_access(const char* path, int mode)
 
 int vfs_select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* timeout)
 {
-
+    
 }
 
 int vfs_fcntl(int fd, int op, int arg)
@@ -322,7 +350,7 @@ int vfs_fcntl(int fd, int op, int arg)
 
 int vfs_flock(int fd, int op)
 {
-
+    return -ENOSYS;
 }
 
 int vfs_fsync(int fd)
@@ -342,26 +370,21 @@ int vfs_chdir(const char* path)
 
 ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count)
 {
-    ssize_t n;
-    mutex_lock(&vfs_cache_lock);
     struct file* f = proc_fd_get(current_process, fd);
     if (!f || !(f->flags & O_RDONLY)) {
-        n = -EBADF;
-        goto exit;
+        return -EBADF;
     }
 
     //check if it is a directory or nah
     if (!(f->i->perm.mode & S_IFDIR)) {
-        n = -ENOTDIR;
-        goto exit;
+        return -ENOTDIR;
     }
 
-    n = f->i->fs->fops->readdir(f, buf, count);
-    if (n > 0) {
-        f->offset += n;
-    }
-exit:
-    mutex_unlock(&vfs_cache_lock);
+    ssize_t n = f->i->fs->fops->readdir(f, buf, count);
+    mutex_lock(&vfs_file_lock);
+    if (n > 0) f->offset += n;
+    mutex_unlock(&vfs_file_lock);
+
     return n;
 }
 

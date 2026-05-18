@@ -26,16 +26,16 @@
 #define S_IXOTH     (0b001 << 0)
 
 
-
-
 struct stat {
-    dev_t st_dev;
-    ino_t st_ino;
+    dev_t st_dev; //device containing the file
+    ino_t st_ino; //inode number
     mode_t st_mode;
+    nlink_t st_nlink; //number of hard links
     uid_t st_uid;
-    gid_t st_gid; 
-    dev_t st_rdev; 
+    gid_t st_gid;
+    dev_t st_rdev; //device number if special file
     off_t st_size;
+    blksize_t st_blksize;
     time_t st_atime;
     time_t st_mtime;
     time_t st_ctime;

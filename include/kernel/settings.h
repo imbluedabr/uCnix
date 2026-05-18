@@ -1,5 +1,5 @@
 #define ROOTFS_DEVNO ((2 << 4) | 0)
-#define ROOTFS_TYPE "fatfs"
+#define ROOTFS_TYPE "ucfs"
 #define INIT_PATH "/bin/sh"
 #define INIT_CONSOLE_RDEV 0
 #define INIT_CONSOLE_WDEV 0
@@ -8,7 +8,7 @@
 #define VFS_MAXFILES 32
 #define PROC_MAXFILES 32
 #define BOARD_MCXA153
-#define FS_FATFS
+#define FS_UCFS
 #define TTY_DRIVER
 #define ROMDISK_DRIVER
 #define USART_DRIVER
