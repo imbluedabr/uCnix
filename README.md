@@ -17,7 +17,7 @@ Currently i am targeting arm/riscv microcontrollers with around 64KiB sram but i
 
 1. clone and cd to the repo root.
 2. build the tool(s): `make tools`
-3. create a filesystem: `tools/mkfs ./staging`
+3. create a filesystem: `tools/mkfs.elf ./staging`
 4. build the kernel image: `make image`
 5. flash the image onto your microcontroller(see Flashing).
 3. profit.

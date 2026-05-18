@@ -64,7 +64,7 @@ void disk_init()
 {
     strcpy(disk.magic, "ucfs");
     for (int i = 0; i < 8; i++) {
-        disk.block_bitmap[i] = 0xFFFFFFFF;
+        disk.block_bitmap[i] = 0;
     }
     disk.block_size = 512;
     disk.block_count = 16;
@@ -72,7 +72,7 @@ void disk_init()
     disk.inode_table_size = 4096;
     
     int total_blocks = (disk.inode_table_size/disk.block_size) + disk.block_count + 1;
-    fs_buffer = malloc(total_blocks*disk.block_size);
+    fs_buffer = calloc(total_blocks, disk.block_size);
 }
 
 void disk_sync()
@@ -82,10 +82,11 @@ void disk_sync()
 
 uint8_t block_alloc()
 {
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < disk.block_count; i++) {
         int a = i >> 4;
         int b = i & 0b1111;
         if (!(disk.block_bitmap[a] & (1 << b))) {
+            printf("blk: %d\n", i);
             disk.block_bitmap[a] |= (1 << b);
             disk.block_used++;
             return i;
@@ -152,50 +153,93 @@ void ucfs_initdir(struct ucfs_file* dir)
     }
 }
 
+void ucfs_mkroot(struct ucfs_file* root)
+{
+    uint8_t ino = inode_alloc();
+    struct ucfs_inode* i = inode_read(ino);
+    i->indirect_block = block_alloc();
+    i->nlinks = 1;
+
+    root->ino = ino;
+
+    ucfs_initdir(root);
+}
+
 void ucfs_initfile(struct ucfs_file* file)
 {
     struct ucfs_inode* i = inode_read(file->ino);
-    uint8_t* indirect_table = fs->buffer + i->indirect_block*512 + 6*512;
+    uint8_t* indirect_table = fs_buffer + i->indirect_block*512 + 6*512;
 
     for (int i = 0; i < 256; i++) {
         indirect_table[i] = 255;
     }
 }
 
-/*
-void generate_fs(const char* path, uint8_t root_dir)
+void ucfs_listdir(struct ucfs_file* file, int depth)
+{
+    struct ucfs_inode* dir = inode_read(file->ino);
+
+    struct ucfs_file* entries = (struct ucfs_file*)(fs_buffer + dir->indirect_block*512 + 6*512);
+
+    for (int i = 0; i < 42; i++) {
+        if (entries[i].ino != 255) {
+            struct ucfs_inode* f = inode_read(entries[i].ino);
+            printf("%*s%o %d %d %d\t%d %d %s\n", depth*4, " ",f->perm.mode, f->nlinks, f->perm.group, f->perm.user, f->size, f->mtime, entries[i].name);
+            if (f->perm.mode & FS_IFDIR) {
+                ucfs_listdir(&entries[i], depth + 1);
+            }
+        }
+    }
+
+}
+
+void generate_fs(const char* path, struct ucfs_file* root_dir)
 {
     DIR *dir;
     struct dirent *entry;
 
     dir = opendir(path);
-    uint8_t current_dir = root_dir;
+    struct ucfs_file* current_dir = root_dir;
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_DIR) {
             char new_path[1024];
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
             snprintf(new_path, sizeof(new_path), "%s/%s", path, entry->d_name);
-            struct fatfs_file* new_dir = create_file(current_dir, entry->d_name, (struct permissions) { .user = 0, .group = 0, .mode = FAT_IFDIR | FAT_IROTH | FAT_IXOTH});
-            initialize_dir(new_dir->fat_index);
+            struct ucfs_file* new_dir = ucfs_mkfile(current_dir, entry->d_name, (struct permissions) {
+                    .user = 100,
+                    .group = 100,
+                    .mode = FS_IFDIR | FS_IRUSR | FS_IXUSR
+                    });
+            ucfs_initdir(new_dir);
             printf("entering directory %s\n", entry->d_name);
-            generate_fs(new_path, new_dir->fat_index);
+            generate_fs(new_path, new_dir);
             printf("leaving directory %s\n", entry->d_name);
         } else {
-            struct fatfs_file* new_file = create_file(current_dir, entry->d_name, (struct permissions) { .user = 0, .group = 0, .mode = FAT_IFREG | FAT_IROTH | FAT_IXOTH});
-            printf("file %s\n", entry->d_name);
+            struct ucfs_file* new_file = ucfs_mkfile(current_dir, entry->d_name, (struct permissions) {
+                    .user = 100,
+                    .group = 100,
+                    .mode = FS_IFREG | FS_IRUSR | FS_IXUSR
+                    });
         }
     }
     closedir(dir);
 }
-*/
 
+
+struct ucfs_file root;
 int main(int argc, char** argv)
 {
+    if (argc != 2) {
+        printf("usage: mkfs [FILE]\n");
+        return -1;
+    }
     disk_init();
+    ucfs_mkroot(&root);
 
+    generate_fs(argv[1], &root);
     
-
+    ucfs_listdir(&root, 0);
     disk_sync();
     int imgfd = open("rootfs.bin", O_CREAT | O_RDWR, S_IFREG | S_IRUSR | S_IWUSR );
 
