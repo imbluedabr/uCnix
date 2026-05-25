@@ -116,6 +116,7 @@ void file_free(struct file* f)
     }
     f->refcount = 0;
     mutex_unlock(&vfs_file_lock);
+    inode_free(f->i);
     
     if (file_table_free_top == VFS_MAXFILES)
     {   //very bad, means memory was leaked
@@ -185,7 +186,7 @@ struct inode* vfs_read_inode(struct filesystem* fs, ino_t ino)
     return fs->fops->read_i(fs, ino);
 }
 
-struct inode* vfs_walk_path(const char* path)
+struct inode* vfs_walk_path(const char* path, int mode)
 {
     int path_idx = 0;
     char path_cpy[FS_PATH_LEN+1];
@@ -225,6 +226,17 @@ struct inode* vfs_walk_path(const char* path)
         path_idx++;
     }
 
+    if (mode != VFS_LOOKUP_BASE) {
+        ino_t ino = vfs_read_dentry(current_dir, current_word);
+        struct inode* next = vfs_read_inode(current_dir->fs, ino);
+        if (!next) {
+            inode_free(current_dir);
+            return NULL;
+        }
+        inode_free(current_dir);
+        current_dir = next;
+    }
+
     return current_dir;
 }
 
@@ -248,13 +260,11 @@ ssize_t vfs_read(int fd, void* buffer, size_t count)
     ssize_t n;
     struct file* f = proc_fd_get(current_process, fd);
     if (!f || !(f->flags & O_RDONLY)) {
-        n = -EBADF;
-        goto exit;
+        return -EBADF;
     }
 
     if (f->i->perm.mode & S_IFDIR) {
-        n = -EISDIR;
-        goto exit;
+        return -EISDIR;
     }
 
     n = f->i->fs->fops->read(f, buffer, count);
@@ -262,8 +272,6 @@ ssize_t vfs_read(int fd, void* buffer, size_t count)
     mutex_lock(&vfs_file_lock);
     if (n > 0) f->offset += n;
     mutex_unlock(&vfs_file_lock);
-
-exit:
     return n;
 }
 
@@ -287,7 +295,7 @@ ssize_t vfs_write(int fd, const void* buffer, size_t count)
 
 int vfs_open(const char* path, int flags)
 {
-    struct inode* i = vfs_walk_path(path);
+    struct inode* i = vfs_walk_path(path, 0);
     if (!i) {
         return -ENOENT;
     }
@@ -308,8 +316,7 @@ int vfs_open(const char* path, int flags)
 int vfs_close(int fd)
 {
     struct file* f = proc_fd_get(current_process, fd);
-    inode_free(f->i);
-    f->i = NULL;
+    if (!f) return -EBADF;
     file_free(f);
     proc_fd_free(current_process, fd); 
     return 0;
@@ -325,7 +332,7 @@ int vfs_fstat(int fd, struct stat *statbuf)
 
 off_t vfs_lseek(int fd, off_t offset, int whence)
 {
-
+    
 }
 
 int vfs_ioctl(int fd, int cmd, void* arg)

@@ -18,9 +18,7 @@
 #include <uapi/sys/fcntl.h>
 #include <uapi/sys/disk.h>
 #include <uapi/sys/dir.h>
-
-[[gnu::aligned(8)]] uint8_t kernel_init_stack[256];
-[[gnu::aligned(8)]] uint8_t kernel_worker_stack[256];
+#include <uapi/signal.h>
 
 void kernel_worker_process()
 {
@@ -28,13 +26,19 @@ void kernel_worker_process()
     time_t last = get_kernel_ticks();
     while (1) {
         if ((get_kernel_ticks() - last) > 1000) {
+            kinfo("kernel_worker: sending signal %d!\n", SIGCONT);
+            proc_kill(1, SIGCONT);
             last = get_kernel_ticks();
             system_blink();
         }
         device_global_update();
     }
 }
-
+static const char* pstate_names[] = {
+    "ZOMBIE",
+    "BLOCKEd",
+    "READY"
+};
 void kernel_init_process()
 {
     kinfo("vfs: mounting rootfs on dev (%d,%d) of type (%s) on /\n", MAJOR(ROOTFS_DEVNO), MINOR(ROOTFS_DEVNO), ROOTFS_TYPE);
@@ -50,8 +54,19 @@ void kernel_init_process()
     struct memstat buff;
     heap_stat(&buff);
     kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
-
-
+    
+    kdbg("proc: STATE:PID:PPID:MODE\n");
+    mutex_lock(&proc_acces_lock);
+    struct proc* p = proc_active_list;
+    while (p) {
+        kdbg("proc: %s\t%d\t%d\n", pstate_names[p->state], p->pid, p->ppid);
+        p = p->next;
+    }
+    mutex_unlock(&proc_acces_lock);
+    
+    kinfo("init: waiting for SIGCONT!\n");
+    proc_block(current_process);
+    kinfo("init: recieved signal!\n");
 
 abort:
     kinfo("halting kernel...\n");
@@ -78,6 +93,18 @@ void kernel_pre_init()
     tty_init();
 }
 
+const process_desc_t kernel_worker_proc = {
+    .entry_point = &kernel_worker_process,
+    .stopped = 0,
+    .kernel_mode = 1
+};
+const process_desc_t kernel_init_proc = {
+    .entry_point = &kernel_init_process,
+    .stopped = 0,
+    .kernel_mode = 1
+};
+
+
 [[noreturn]] void kernel_init()
 {
     //initialize boot console
@@ -93,10 +120,12 @@ void kernel_pre_init()
     devtbl_init();
 
     kinfo("init: starting kernel worker\n");
-    proc_create(kernel_worker_stack, NULL, 256, &kernel_worker_process);
-    kinfo("init: starting kernel init\n");
-    proc_create(kernel_init_stack, NULL, 256, &kernel_init_process);
+    proc_create(&kernel_worker_proc);
     
+    kinfo("init: starting kernel init\n");
+    struct proc* p = proc_create(&kernel_init_proc);
+    p->sigmask = 1 << SIGCONT; //enable sigcont signal
+
     proc_start_scheduling();
     while(1);
 }

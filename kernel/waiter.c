@@ -12,7 +12,7 @@ void waiter_push(waiter_t* waiter, struct proc* process)
         waiter->head->wait_next = process;
         waiter->head = process;
     }
-    process->waiter = waiter; //store which waiter the process is blocked on
+    process->waiting_on = waiter; //store which waiter the process is blocked on
 }
 
 //dequeue a process from a waiter
@@ -25,7 +25,7 @@ struct proc* waiter_pop(waiter_t* waiter)
     struct proc* next = waiter->tail;
     waiter->tail = next->wait_next;
     next->wait_next = NULL;
-    next->waiter = NULL;
+    next->waiting_on = NULL;
 
     if (!waiter->tail) { //if there are no more items we also set the head to NULL
         waiter->head = NULL;

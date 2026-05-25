@@ -1,9 +1,11 @@
 #pragma once
 #include <uapi/sys/types.h>
 #include <kernel/waiter.h>
+#include <kernel/lock.h>
 #include <kernel/settings.h>
 #include <fs/vfs.h>
 #include <board/board.h>
+#include <stdbool.h>
 
 typedef enum : uint8_t {
     PROC_ZOMBIE,
@@ -35,24 +37,45 @@ struct proc {
     pid_t ppid;
     pid_t pgrp;
     uint32_t sigmask;
+    int exit_code;
 
     cred_t credentials;
     uint8_t local_fd_table[PROC_MAXFILES];
 
+    //current working directory of the process
     struct inode* cwd;
-
-    waiter_t* waiter;
+    
+    //lock for accessing the process data
+    mutex_t lock;
+    uint8_t crit_section;
+    uint8_t refcount;
+    
+    waiter_t* waiting_on;
     struct proc* wait_next; //next item in the wait queue
+    struct proc* next; //next process in the process linked list
+
 };
 
+typedef struct {
+    uint8_t* user_stack;
+    size_t size;
+    void (*entry_point)();
+    uint8_t stopped : 1;
+    uint8_t kernel_mode : 1;
+} process_desc_t;
+
+extern mutex_t proc_acces_lock;
 extern struct proc* current_process;
-#define PROC_TABLE_LEN 4
+extern struct proc* proc_active_list;
+extern bool proc_sched_started;
 
 void proc_init();
-struct proc* proc_create(uint8_t* ustack, uint8_t* kstack, uint32_t size, void (*entry_point)());
+struct proc* proc_create(process_desc_t* descriptor);
+int proc_kill(pid_t pid, int sig); //send a signal to a process
+int proc_reap(struct proc* p);
 
-void proc_unblock_process(pid_t process); //unblock a process
-void proc_block(); //block the current process
+void proc_unblock_process(struct proc* p); //unblock a process
+void proc_block(struct proc* p); //block a process
 
 int proc_fd_alloc(struct proc* p);
 void proc_fd_free(struct proc* p, int fd);

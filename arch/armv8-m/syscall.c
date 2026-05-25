@@ -51,7 +51,7 @@ void syscall_thread_main()
     
     device_request_io(dev, &req);
     
-    proc_block();
+    proc_block(current_process);
     
 }
 

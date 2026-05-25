@@ -17,6 +17,7 @@ $(shell echo "#define BOARD_TYPE $(CONFIG_BOARD_TYPE)" >> $(SETTINGS_FILE))
 $(shell echo "#define BOARD_ARCH \"$(CONFIG_BOARD_ARCH)\"" >> $(SETTINGS_FILE))
 $(shell echo "#define VFS_MAXFILES $(CONFIG_VFS_MAXFILES)" >> $(SETTINGS_FILE))
 $(shell echo "#define PROC_MAXFILES $(CONFIG_PROC_MAXFILES)" >> $(SETTINGS_FILE))
+$(shell echo "#define PROC_MAX_PROC $(CONFIG_PROC_MAX_PROC)" >> $(SETTINGS_FILE))
 
 
 ifeq ($(CONFIG_BOARD_MCXA153), y)

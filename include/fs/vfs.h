@@ -21,6 +21,8 @@ struct file_ops;
 //retrieve inode number
 #define FS_GET_INO(INO) (INO & 0xFFFFFF)
 
+#define VFS_LOOKUP_BASE 1
+
 struct permissions {
     uid_t user;
     gid_t group;
@@ -81,13 +83,16 @@ struct file_ops {
     int (*fstat)(struct file* f, struct stat* statbuf);
     off_t (*ftruncate)(struct file* f, off_t lenght);
 
-    //inode operations
+    //filesystem operations
     int (*mount)(struct inode* mountpoint, dev_t devno, int mountflags);
     int (*umount)(struct filesystem* fs);
     int (*statfs)(struct filesystem* fs);
     
+    //inode operations
     struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
-    int (*remove)(struct inode* target);
+    int (*link)(struct inode* dir, struct inode* target, const char* name);
+    int (*unlink)(struct inode* dir, const char* name);
+    int (*close)(struct inode* targer);
 
     //filesystem lookup function
     ino_t (*lookup)(struct inode* dir, const char* name); //lookup an inode inside a dir
@@ -100,13 +105,14 @@ struct file_ops {
 extern mutex_t vfs_cache_lock;
 struct inode* inode_alloc();
 void inode_free(struct inode* i);
+void file_free(struct file* f);
 
 extern struct file vfs_file_table[VFS_MAXFILES];
 extern struct inode vfs_root;
 
 void vfs_init();
 int vfs_get_fsid();
-struct inode* vfs_walk_path(const char* path);
+struct inode* vfs_walk_path(const char* path, int mode);
 struct file_ops* get_filesystem(const char* name);
 int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags);
 

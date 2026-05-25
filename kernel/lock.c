@@ -16,6 +16,7 @@ void mutex_init(mutex_t* mut)
 //TODO: count and lock can be just one variable since lock will be 0 if count reaches 0, having 2 seperate variables is useless
 void mutex_lock(mutex_t* mut)
 {
+    if (!proc_sched_started) return;
     int irq = disable_interrupts();
 
     if (mut->lock && current_process->pid == mut->owner) {
@@ -27,7 +28,7 @@ void mutex_lock(mutex_t* mut)
     if (mut->lock) {    //if the mutex is locked we add the process to the wait queue and then block it
         waiter_push(&mut->waiter, current_process);
         enable_interrupts(irq);
-        proc_block();
+        proc_block(current_process);
         
         //if we get unblocked that means that we get the lock 
         return;
@@ -36,13 +37,14 @@ void mutex_lock(mutex_t* mut)
     //claim the lock
     mut->lock = 1;
     mut->owner = current_process->pid;
+    current_process->crit_section = 1;
     mut->count = 1;
     enable_interrupts(irq);
 }
 
 void mutex_unlock(mutex_t* mut)
 {
-    
+    if (!proc_sched_started) return;
     int irq = disable_interrupts();
     
     if (mut->owner != current_process->pid) {
@@ -54,19 +56,19 @@ void mutex_unlock(mutex_t* mut)
         enable_interrupts(irq);
         return;
     }
-
+    current_process->crit_section = 0;
     //pop the next process of the wait queue
     struct proc* next = waiter_pop(&mut->waiter);
     if (next) {
+        next->crit_section = 1;
         mut->owner = next->pid;
         enable_interrupts(irq);
-        proc_unblock_process(next->pid);
+        proc_unblock_process(next);
         return;
     }
 
     //if there are no items on the wait queue unclaim the lock
     mut->lock = 0;
-
     enable_interrupts(irq);
 }
 

@@ -7,6 +7,7 @@
 #define BOARD_ARCH "armv8-m"
 #define VFS_MAXFILES 32
 #define PROC_MAXFILES 32
+#define PROC_MAX_PROC 4
 #define BOARD_MCXA153
 #define FS_UCFS
 #define TTY_DRIVER

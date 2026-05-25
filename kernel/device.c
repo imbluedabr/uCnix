@@ -72,7 +72,7 @@ void device_finish_request(struct device* dev, ssize_t bytes_transfered) //finis
     struct io_request* req = device_peek_request(dev);
     req->offset = bytes_transfered;
     req->status = 1;
-    proc_unblock_process(waiter_pop(&req->waiter)->pid);
+    proc_unblock_process(waiter_pop(&req->waiter));
     device_dequeue_request(dev);
 }
 
@@ -88,7 +88,7 @@ ssize_t device_write(struct device* dev, void* buffer, size_t count, off_t offse
 
     device_request_io(dev, &req);
 
-    proc_block();
+    proc_block(current_process);
 
     return req.offset;
 }
@@ -105,7 +105,7 @@ ssize_t device_read(struct device* dev, void* buffer, size_t count, off_t offset
 
     device_request_io(dev, &req);
 
-    proc_block();
+    proc_block(current_process);
     
     return req.offset;
 }
