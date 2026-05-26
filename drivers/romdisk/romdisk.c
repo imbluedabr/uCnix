@@ -86,7 +86,7 @@ void romdisk_update(struct device* dev)
     }
     
     if (read_block(romdisk, req->buffer, req->offset + blocks_transfered) == -1) {
-        kputs("read block error!\n");
+        kerr("romdisk: read block error! lba=%d\n", req->offset + blocks_transfered);
         device_finish_request(dev, -EIO);
         romdisk->blocks_transfered = 0;
         return;

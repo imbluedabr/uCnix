@@ -148,7 +148,7 @@ int ucfs_mount(struct inode* mountpoint, dev_t devno, int mountflags)
 
     mountpoint->fs = &ucfs->base;
     mountpoint->ino = 0;
-
+    mountpoint->ucfs.indirect_block = 0;
     return 0;
 }
 
@@ -187,7 +187,8 @@ struct inode* ucfs_read_i(struct filesystem* fs, ino_t ino)
     int sector = address/ucfs->base.block_size;
     int sector_offset = ucfs->inode_block_offset + sector;
     int index = local_ino - sector*32;
-
+    //kdbg("lba = %d\n", sector_offset);
+    kprintf("%d\n", sector_offset);
     device_read(ucfs->dev, ucfs->scratch_buffer, 1, sector_offset);
 
     struct ucfs_inode* i = &((struct ucfs_inode*) ucfs->scratch_buffer)[index];

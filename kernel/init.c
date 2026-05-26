@@ -26,8 +26,6 @@ void kernel_worker_process()
     time_t last = get_kernel_ticks();
     while (1) {
         if ((get_kernel_ticks() - last) > 1000) {
-            kinfo("kernel_worker: sending signal %d!\n", SIGCONT);
-            proc_kill(1, SIGCONT);
             last = get_kernel_ticks();
             system_blink();
         }
@@ -54,19 +52,9 @@ void kernel_init_process()
     struct memstat buff;
     heap_stat(&buff);
     kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
-    
-    kdbg("proc: STATE:PID:PPID:MODE\n");
-    mutex_lock(&proc_acces_lock);
-    struct proc* p = proc_active_list;
-    while (p) {
-        kdbg("proc: %s\t%d\t%d\n", pstate_names[p->state], p->pid, p->ppid);
-        p = p->next;
-    }
-    mutex_unlock(&proc_acces_lock);
-    
-    kinfo("init: waiting for SIGCONT!\n");
-    proc_block(current_process);
-    kinfo("init: recieved signal!\n");
+
+    int fd = vfs_open("/", O_RDONLY);
+    kdbg("fd: %d\n", fd);
 
 abort:
     kinfo("halting kernel...\n");
