@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
 
@@ -113,9 +114,11 @@ struct ucfs_inode* inode_read(uint8_t ino)
     return &((struct ucfs_inode*)(fs_buffer + 1024))[ino];
 }
 
+#define CALC_BADDR(BLOCK) (fs_buffer + (BLOCK*512 + 6*512))
+
 struct ucfs_file* ucfs_mklink(struct ucfs_file* dir, uint8_t ino, const char* name)
 {
-    struct ucfs_file* entries = (struct ucfs_file*)(fs_buffer + inode_read(dir->ino)->indirect_block*512 + 6*512);
+    struct ucfs_file* entries = (struct ucfs_file*)(CALC_BADDR(inode_read(dir->ino)->indirect_block));
 
     for (int i = 0; i < 42; i++) {
         if (entries[i].ino == 255) {
@@ -146,7 +149,7 @@ struct ucfs_file* ucfs_mkfile(struct ucfs_file* dir, const char* name, struct pe
 void ucfs_initdir(struct ucfs_file* dir)
 {
     struct ucfs_inode* i = inode_read(dir->ino);
-    struct ucfs_file* entries = (struct ucfs_file*)(fs_buffer + i->indirect_block*512 + 6*512);
+    struct ucfs_file* entries = (struct ucfs_file*)(CALC_BADDR(i->indirect_block));
 
     for (int i = 0; i < 42; i++) {
         entries[i].ino = 255;
@@ -168,11 +171,30 @@ void ucfs_mkroot(struct ucfs_file* root)
 void ucfs_initfile(struct ucfs_file* file)
 {
     struct ucfs_inode* i = inode_read(file->ino);
-    uint8_t* indirect_table = fs_buffer + i->indirect_block*512 + 6*512;
+    uint8_t* indirect_table = CALC_BADDR(i->indirect_block);
 
     for (int i = 0; i < 256; i++) {
         indirect_table[i] = 255;
     }
+}
+
+void ucfs_writefile(struct ucfs_file* file, uint8_t* buffer, int count)
+{
+    printf("writing file: size=%d\n", count);
+    struct ucfs_inode* i = inode_read(file->ino);
+    uint8_t* indirect_table = CALC_BADDR(i->indirect_block);
+    int bytes_read = 0;
+    
+    while (bytes_read < count) {
+        int block_idx = block_alloc();
+        indirect_table[bytes_read >> 9] = block_idx;
+
+        int to_read = ((count - bytes_read) > 512) ? 512 : (count - bytes_read);
+        memcpy(CALC_BADDR(block_idx), buffer + bytes_read, to_read);
+        bytes_read += to_read;
+    }
+
+    i->size = bytes_read;
 }
 
 void ucfs_listdir(struct ucfs_file* file, int depth)
@@ -184,13 +206,12 @@ void ucfs_listdir(struct ucfs_file* file, int depth)
     for (int i = 0; i < 42; i++) {
         if (entries[i].ino != 255) {
             struct ucfs_inode* f = inode_read(entries[i].ino);
-            printf("%*s%o %d %d %d\t%d %d %s\n", depth*4, " ",f->perm.mode, f->nlinks, f->perm.group, f->perm.user, f->size, f->mtime, entries[i].name);
+            printf("%*s%o\t%d\t%d\t%d\t%d\t%d\t%s\n", depth*4, "",f->perm.mode, f->nlinks, f->perm.group, f->perm.user, f->size, f->mtime, entries[i].name);
             if (f->perm.mode & FS_IFDIR) {
                 ucfs_listdir(&entries[i], depth + 1);
             }
         }
     }
-
 }
 
 void generate_fs(const char* path, struct ucfs_file* root_dir)
@@ -201,12 +222,13 @@ void generate_fs(const char* path, struct ucfs_file* root_dir)
     dir = opendir(path);
     struct ucfs_file* current_dir = root_dir;
     while ((entry = readdir(dir)) != NULL) {
+        char new_path[1024];
+        snprintf(new_path, sizeof(new_path), "%s/%s", path, entry->d_name);
+
         if (entry->d_type == DT_DIR) {
-            char new_path[1024];
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
                 continue;
-            snprintf(new_path, sizeof(new_path), "%s/%s", path, entry->d_name);
-            struct ucfs_file* new_dir = ucfs_mkfile(current_dir, entry->d_name, (struct permissions) {
+                struct ucfs_file* new_dir = ucfs_mkfile(current_dir, entry->d_name, (struct permissions) {
                     .user = 100,
                     .group = 100,
                     .mode = FS_IFDIR | FS_IRUSR | FS_IXUSR
@@ -221,6 +243,14 @@ void generate_fs(const char* path, struct ucfs_file* root_dir)
                     .group = 100,
                     .mode = FS_IFREG | FS_IRUSR | FS_IXUSR
                     });
+            int fd = open(new_path, O_RDONLY);
+            struct stat st;
+            fstat(fd, &st);
+            uint8_t* buffer = malloc(st.st_size);
+            read(fd, buffer, st.st_size);
+            close (fd);
+            ucfs_writefile(new_file, buffer, st.st_size);
+            free(buffer);
         }
     }
     closedir(dir);

@@ -3,8 +3,8 @@
 #include <kernel/time.h>
 #include <kernel/device.h>
 #include <kernel/panic.h>
-#include <kernel/alloc.h>
 #include <lib/stdlib.h>
+#include <lib/kmalloc.h>
 #include <arch/armv8-m/proc.h>
 #include <arch/armv8-m/syscall.h>
 #include <fs/vfs.h>
@@ -27,7 +27,7 @@ uint8_t proc_run_queue_count;
 struct proc* current_process;
 bool proc_sched_started;
 
-typedef uint8_t stack_t[256];
+typedef uint8_t stack_t[PROC_KSTACK_SIZE];
 [[gnu::aligned(8)]] stack_t stack_array[PROC_MAX_PROC];
 uint8_t stack_free_list[PROC_MAX_PROC];
 uint8_t stack_free_list_top;
@@ -214,7 +214,7 @@ struct proc* proc_create(process_desc_t* descriptor)
         p->control.w = CONTROL_SPSEL_Msk | CONTROL_nPRIV_Msk;
     } else {
         uint8_t* kstack = (uint8_t*) stack_alloc();
-        p->psp = kstack + 256; //the stack grows downwards so we must put the top of the array into psp
+        p->psp = kstack + PROC_KSTACK_SIZE; //the stack grows downwards so we must put the top of the array into psp
         p->splim = kstack; //the limit of the stack is the base of the stack memory
         
         p->control.w = CONTROL_SPSEL_Msk;
@@ -223,7 +223,7 @@ struct proc* proc_create(process_desc_t* descriptor)
     //kernel mode thread
     if (!descriptor->kernel_mode) {
         uint8_t* kstack = (uint8_t*) stack_alloc();
-        p->save_psp = kstack + 256;
+        p->save_psp = kstack + PROC_KSTACK_SIZE;
         p->save_splim = kstack;
         p->save_control.w = CONTROL_SPSEL_Msk;
     }
@@ -373,7 +373,7 @@ struct proc* proc_stop_scheduling()
 
     struct proc* last_process = current_process;
     current_process = NULL;
-    
+    proc_sched_started = false;    
     return last_process;
 }
 

@@ -3,12 +3,12 @@
 #include <uapi/sys/fcntl.h>
 #include <fs/devfs.h>
 #include <fs/ucfs.h>
-#include <kernel/alloc.h>
 #include <kernel/interrupt.h>
 #include <kernel/lock.h>
 #include <kernel/proc.h>
 #include <kernel/panic.h>
 #include <lib/stdlib.h>
+#include <lib/kmalloc.h>
 
 static struct inode* free_list;
 static struct inode* cache_list;
@@ -149,7 +149,7 @@ void vfs_init()
 }
 
 //lookup an inode using a name and parent directory inode
-ino_t vfs_read_dentry(struct inode* dir, const char* name)
+static inline ino_t vfs_read_dentry(struct inode* dir, const char* name)
 {
     for (int i = 0; i < DENTRY_CACHE_LEN; i++) {
         struct dentry* d = &dentry_cache[i];
@@ -159,6 +159,7 @@ ino_t vfs_read_dentry(struct inode* dir, const char* name)
         }
     }
     ino_t new_ino = dir->fs->fops->lookup(dir, name);
+    if (new_ino < 0) return new_ino;
     mutex_lock(&vfs_dentry_lock);
     struct dentry* d = dentry_alloc();
     d->ino = new_ino;
@@ -169,7 +170,7 @@ ino_t vfs_read_dentry(struct inode* dir, const char* name)
     return new_ino;
 }
 
-struct inode* vfs_read_inode(struct filesystem* fs, ino_t ino)
+static inline struct inode* vfs_read_inode(struct filesystem* fs, ino_t ino)
 {
     struct inode* current = cache_list;
     mutex_lock(&vfs_cache_lock);
@@ -198,6 +199,7 @@ struct inode* vfs_walk_path(const char* path, int mode)
     if (*path == '/') {
         current_dir = &vfs_root;
         path_idx++;
+        current_word++;
     } else {
         mutex_lock(&vfs_cache_lock);
         current_dir = current_process->cwd;
@@ -214,11 +216,9 @@ struct inode* vfs_walk_path(const char* path, int mode)
             path_cpy[path_idx] = '\0';
 
             ino_t ino = vfs_read_dentry(current_dir, current_word);
+            if (ino < 0) goto error;
             struct inode* next = vfs_read_inode(current_dir->fs, ino);
-            if (!next) {
-                inode_free(current_dir);
-                return NULL;
-            }
+            if (!next) goto error;
             inode_free(current_dir);
             current_dir = next;
             current_word = path_cpy + path_idx + 1;
@@ -226,18 +226,18 @@ struct inode* vfs_walk_path(const char* path, int mode)
         path_idx++;
     }
 
-    if (mode != VFS_LOOKUP_BASE) {
+    if (mode != VFS_LOOKUP_BASE && *current_word) {
         ino_t ino = vfs_read_dentry(current_dir, current_word);
         struct inode* next = vfs_read_inode(current_dir->fs, ino);
-        if (!next) {
-            inode_free(current_dir);
-            return NULL;
-        }
+        if (!next) goto error;
         inode_free(current_dir);
         current_dir = next;
     }
 
     return current_dir;
+error:
+    inode_free(current_dir);
+    return NULL;
 }
 
 int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags)

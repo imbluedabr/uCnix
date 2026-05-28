@@ -7,7 +7,7 @@
 
 #define MKDEV(MAJOR_NO, MINOR_NO) ((MAJOR_NO << 4) | (MINOR_NO & 0xF))
 
-typedef uint32_t ino_t; //this is a unique identifier for an inode, this would be like the cluster + offset in fat
+typedef int ino_t; //this is a unique identifier for an inode, this would be like the cluster + offset in fat
 typedef uint32_t off_t;
 typedef uint32_t ssize_t;
 typedef uint8_t dev_t;

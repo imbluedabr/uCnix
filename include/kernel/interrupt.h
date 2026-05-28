@@ -2,8 +2,6 @@
 
 #define VECTOR_TABLE_SIZE 96
 extern uint32_t vector_table[VECTOR_TABLE_SIZE];
-extern uint32_t __Vectors[VECTOR_TABLE_SIZE];
-
 
 //initialize the ram interrupt vector table
 void interrupt_init();

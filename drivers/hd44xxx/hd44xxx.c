@@ -1,10 +1,10 @@
 #include <drivers/hd44xxx.h>
-#include <kernel/alloc.h>
 #include <kernel/time.h>
 #include <kernel/proc.h>
 #include <board/board.h>
 #include <kernel/majors.h>
 #include <lib/kprint.h>
+#include <lib/kmalloc.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include "port.h"

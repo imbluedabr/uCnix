@@ -16,20 +16,35 @@ nmi_handler:
     .globl   hardfault_handler
     .type    hardfault_handler, %function
 hardfault_handler:
-    mrs r0, psp
-    /* pass pc to panic_handler */
-    /* frame->r0 = frame->pc*/
-    ldr r1, [r0, #24]
-    str r1, [r0, #0]
-    /* frame->pc = panic_handler */
-    ldr r1, =panic_handler
-    str r1, [r0, #24]
+    /* create emergency stack */
+    ldr   r1, =__stack_top
+    sub   r1, r1, #32           /* allocate the stack frame */
+    msr   msp, r1
+    dsb
 
-    /* return to thread mode into the panic handler */
-    ldr r0, =0xFFFFFFB8
-    mov lr, r0
-    bx lr
+    /* panic_fram->r0 = frame->pc */
+    ldr   r2, [r0, #24]
+    str   r2, [r1, #0]         @ new_frame->r0
 
+    /* zero other regs */
+    movs  r2, #0
+    str   r2, [r1, #4]
+    str   r2, [r1, #8]
+    str   r2, [r1, #12]
+    str   r2, [r1, #16]
+    str   r2, [r1, #20]
+
+    /* panic_frame->pc = &panic_handler */
+    ldr   r2, =panic_handler
+    str   r2, [r1, #24]
+
+    /* panic_frame->cpsr = 0x01000000 so thumb bit is set */
+    ldr   r2, =0x1000000
+    str   r2, [r1, #28]
+
+    ldr   r0, =0xFFFFFFB8
+    mov   lr, r0
+    bx    lr
 
     .thumb_func
     .align 2

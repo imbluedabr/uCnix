@@ -1,9 +1,9 @@
 #include <drivers/romdisk.h>
-#include <kernel/alloc.h>
 #include <kernel/majors.h>
 #include <uapi/sys/errno.h>
 #include <uapi/sys/disk.h>
 #include <lib/stdlib.h>
+#include <lib/kmalloc.h>
 #include <lib/kprint.h>
 
 struct device_driver romdisk_driver = {

@@ -5,14 +5,14 @@ typedef enum : uint8_t {
     MCXA_LPUART
 } usart_type_e;
 
+extern const int usart_baud_rates[11];
+
 struct usart_desc {
     void* base;
-    uint8_t baud; //baudrate is computed by 300 * (2 << n)
+    uint8_t baud;
     uint8_t irq;
     usart_type_e type;
 };
-
-#define USART_CALC_BAUD(N) (300 * (1 << N))
 
 #define USART_TX_FIFO_LEN 16
 #define USART_TX_FIFO_MSK (USART_TX_FIFO_LEN - 1)

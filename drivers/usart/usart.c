@@ -1,5 +1,5 @@
 #include <drivers/usart.h>
-#include <kernel/alloc.h>
+#include <lib/kmalloc.h>
 #include <kernel/settings.h>
 #include <kernel/majors.h>
 #include <kernel/proc.h>
@@ -16,6 +16,20 @@ static const struct usart_impl impl_table[] = {
         .destroy = &usart_mcxa_destroy
     }
 #endif
+};
+
+const int usart_baud_rates[11] = {
+    110,
+    300,
+    1200,
+    2400,
+    4800,
+    9600,
+    19200,
+    28800,
+    38400,
+    57600,
+    115200
 };
 
 struct device_driver usart_driver = {

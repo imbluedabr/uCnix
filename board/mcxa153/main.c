@@ -29,19 +29,19 @@ const device_node_t static_device_table[] = {
         .preinit = 1,
         .desc = &(struct usart_desc) {
             .base = LPUART0,
-            .baud = 5,
+            .baud = 10,
             .irq = LPUART0_IRQn,
             .type = MCXA_LPUART
         }
     },
-/*    {
+    {
         .major = HD44XXX_MAJOR,
         .preinit = 1,
         .desc = &(struct hd44xxx_desc) {
             .port = NULL,
-            .type = HD_44780_4002
+            .type = HD_ST_9720
         }
-    },*/
+    },
     {
         .major = ROMDISK_MAJOR,
         .preinit = 0,
@@ -64,7 +64,8 @@ void main()
 
     dev_t usart0_devno;
     device_create(&usart0_devno, USART_MAJOR, static_device_table[0].desc);
-    
+    device_create(&usart0_devno, HD44XXX_MAJOR, static_device_table[1].desc);
+   
     kernel_init();
 }
 

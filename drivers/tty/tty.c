@@ -1,6 +1,6 @@
 #include <drivers/tty.h>
 #include <kernel/majors.h>
-#include <kernel/alloc.h>
+#include <lib/kmalloc.h>
 #include <lib/kprint.h>
 #include <uapi/sys/errno.h>
 #include <stddef.h>

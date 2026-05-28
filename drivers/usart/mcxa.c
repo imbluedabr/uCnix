@@ -1,6 +1,7 @@
 #include "mcxa.h"
 #include <board/board.h>
 #include <kernel/interrupt.h>
+#include <drivers/usart.h>
 
 
 void usart_mcxa_interrupt()
@@ -46,7 +47,7 @@ void usart_mcxa_init(struct usart_device* usart, struct usart_desc* desc)
     NVIC_ClearPendingIRQ(desc->irq);
     NVIC_EnableIRQ(desc->irq);
 
-    lpuart->BAUD = LPUART_BAUD_OSR(0b01111) | LPUART_BAUD_SBR(CLK_FRO_48MHZ / (USART_CALC_BAUD(desc->baud)* 16));
+    lpuart->BAUD = LPUART_BAUD_OSR(0b01111) | LPUART_BAUD_SBR(CLK_FRO_48MHZ / (usart_baud_rates[desc->baud]*16));
     lpuart->CTRL |= LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK | LPUART_CTRL_RIE_MASK;
 }
 

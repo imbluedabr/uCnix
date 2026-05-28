@@ -64,6 +64,13 @@ void kprintf(const char *fmt, ...)
     va_end(params);
 }
 
+static const char error_names[][13] = {
+    "\e[1;30mDEBUG",
+    "\e[1;34mINFO",
+    "\e[1;33mWARN",
+    "\e[1;31mERROR"
+};
+
 void klog(log_e level, const char* fmt, ...)
 {
     va_list args;
@@ -71,7 +78,7 @@ void klog(log_e level, const char* fmt, ...)
 
     mutex_lock(&console_lock);
 
-    kprintf("[%d] <%d> ", get_kernel_ticks(), level);
+    kprintf("[%d] <%s\e[1;39m> ", get_kernel_ticks(), error_names[level]);
     
 
     kvprintf(fmt, args);

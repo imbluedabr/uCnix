@@ -8,9 +8,11 @@ MEMORY
 {
   m_interrupts          (RX)  : ORIGIN = 0x00000000, LENGTH = 0x00000200
   m_flash                (RX)  : ORIGIN = 0x00000200, LENGTH = 0x0001FE00
-  m_sram                (RWX)  : ORIGIN = 0x20000000, LENGTH = 0x00006000
+  m_srama0              (RWX)  : ORIGIN = 0x20000000, LENGTH = 0x00002000
+  m_srama1x0            (RWX)  : ORIGIN = 0x20002000, LENGTH = 0x00006000
   m_sramx0              (RWX)  : ORIGIN = 0x04000000, LENGTH = 0x00002000
 }
+__userspace_size = 0x6000;
 
 SECTIONS
 {
@@ -49,7 +51,7 @@ SECTIONS
     *(.data*)
     . = ALIGN(4);
     __data_end = .;
-  } > m_sram
+  } > m_srama0
   __DATA_ROM_END = .;
 
   .bss :
@@ -60,7 +62,7 @@ SECTIONS
     *(.bss*)
     . = ALIGN(4);
     __bss_end = .;
-  } > m_sram
+  } > m_srama0
   
   .stack :
   {
@@ -68,5 +70,12 @@ SECTIONS
     . = ALIGN(8);
     . += STACK_SIZE;
     __stack_top = .;
-  } > m_sram
+  } > m_srama0
+
+  .userspace :
+  {
+    . = ALIGN(8);
+    __userspace_start = .;
+    . = ALIGN(8);
+  } > m_srama1x0
 }

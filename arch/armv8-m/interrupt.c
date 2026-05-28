@@ -9,6 +9,8 @@
 
 void* interrupt_registry[VECTOR_TABLE_SIZE];
 
+extern uint32_t __Vectors[VECTOR_TABLE_SIZE];
+
 void interrupt_init()
 {
     memcpy(vector_table, __Vectors, 16*4); //copy the core interrupts to the new table

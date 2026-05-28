@@ -3,56 +3,51 @@
 #include <lib/stdlib.h>
 #include <stddef.h>
 
-static char* block_base;
-[[gnu::aligned(8)]] static struct block block_array[BLOCK_ARRAY_LEN];
-
-static uint8_t unused_blocks[BLOCK_ARRAY_LEN];
-static uint8_t unused_blocks_top;
-
-mutex_t alloc_mut;
-
-struct block* get_block()
+static inline struct block* get_block(struct mem_alloc* heap)
 {
-    if (unused_blocks_top == 0) {
+    if (heap->unused_blocks_top == 0) {
         return NULL;
     }
-    uint8_t idx = unused_blocks[--unused_blocks_top];
-    return &block_array[idx];
+    uint8_t idx = heap->unused_blocks[--heap->unused_blocks_top];
+    return &heap->blk[idx];
 }
 
-int get_block_idx(struct block* b)
+static inline int get_block_idx(struct mem_alloc* heap, struct block* b)
 {
-    return b - block_array;
+    return b - heap->blk;
 }
 
-struct block* get_block_addr(int idx)
+static inline struct block* get_block_addr(struct mem_alloc* heap, int idx)
 {
-    return &block_array[idx];
+    return &heap->blk[idx];
 }
 
-void put_block(struct block* b)
+static inline void put_block(struct mem_alloc* heap, struct block* b)
 {
-    uint8_t idx = b - block_array;
-    unused_blocks[unused_blocks_top++] = idx;
+    uint8_t idx = b - heap->blk;
+    heap->unused_blocks[heap->unused_blocks_top++] = idx;
 }
 
-void heap_init(void* base, int size)
+void heap_init(struct mem_alloc* heap, struct block* blk_array, uint8_t* unused_blocks, void* base, int size, int blk_count)
 {
-    mutex_init(&alloc_mut);
-    block_base = base;
-    block_array[0].size = size;
-    block_array[0].occupied = false;
-    block_array[0].next = BLOCK_NIL;
-    block_array[0].prev = BLOCK_NIL;
-    unused_blocks_top = 0;
-    for (int i = 1; i < BLOCK_ARRAY_LEN; i++) {
-        unused_blocks[unused_blocks_top++] = i;
+    mutex_init(&heap->alloc_mut);
+    heap->block_base = base;
+    heap->blk = blk_array;
+    heap->blk[0].size = size;
+    heap->blk[0].occupied = false;
+    heap->blk[0].next = BLOCK_NIL;
+    heap->blk[0].prev = BLOCK_NIL;
+    heap->unused_blocks_top = 0;
+    heap->blk_count = blk_count;
+    heap->unused_blocks = unused_blocks;
+    for (int i = 1; i < blk_count; i++) {
+        heap->unused_blocks[heap->unused_blocks_top++] = i;
     }
 }
 
-void heap_stat(struct memstat* buff)
+void heap_stat(struct mem_alloc* heap, struct memstat* buff)
 {
-    struct block* current = get_block_addr(0);
+    struct block* current = get_block_addr(heap, 0);
     bool prev_occupied = true;
     memset(buff, 0, sizeof(struct memstat));
 
@@ -73,36 +68,36 @@ void heap_stat(struct memstat* buff)
         if (current->next == BLOCK_NIL) {
             return;
         }
-        current = get_block_addr(current->next);
+        current = get_block_addr(heap, current->next);
     }
 }
 
-void* kmalloc(int size)
+void* heap_alloc(struct mem_alloc* heap, int size)
 {
-    mutex_lock(&alloc_mut);
+    mutex_lock(&heap->alloc_mut);
     
-    struct block* current = get_block_addr(0);
-    char* base = block_base;
+    struct block* current = get_block_addr(heap, 0);
+    char* base = heap->block_base;
     do {
         if (current->size > size && !current->occupied) {
             
-            struct block* new = get_block();
+            struct block* new = get_block(heap);
             if (new == NULL) {
                 base = NULL;
                 break;
             }
             
-            new->prev = get_block_idx(current);
+            new->prev = get_block_idx(heap, current);
             new->next = current->next;
             if (current->next != BLOCK_NIL) {
-                struct block* new_next = get_block_addr(current->next);
-                new_next->prev = get_block_idx(new);
+                struct block* new_next = get_block_addr(heap, current->next);
+                new_next->prev = get_block_idx(heap, new);
             }
             new->occupied = false;
             new->size = current->size - size;
             current->size = size;
             current->occupied = true;
-            current->next = get_block_idx(new);
+            current->next = get_block_idx(heap, new);
             break;
         }
         if (current->size == size && !current->occupied) {
@@ -114,65 +109,55 @@ void* kmalloc(int size)
             break;
         }
         base += current->size;
-        current = get_block_addr(current->next);
+        current = get_block_addr(heap, current->next);
     } while(1);
 
-    mutex_unlock(&alloc_mut);
+    mutex_unlock(&heap->alloc_mut);
     return base;
 }
 
-void* kzalloc(int size)
-{
-    char* mem = kmalloc(size);
-    if (mem == NULL) {
-        return NULL;
-    }
-    memset(mem, 0, size);
-    return mem;
-}
-
-void try_coalesce(struct block* b)
+static inline void try_coalesce(struct mem_alloc* heap, struct block* b)
 {
     if (b->next != BLOCK_NIL) {
-        struct block* next = get_block_addr(b->next);
+        struct block* next = get_block_addr(heap, b->next);
 
         if (next->occupied == false) {
             b->size += next->size;
             b->next = next->next;
             if (b->next != BLOCK_NIL) {
-                struct block* new_next = get_block_addr(b->next);
-                new_next->prev = get_block_idx(b);
+                struct block* new_next = get_block_addr(heap, b->next);
+                new_next->prev = get_block_idx(heap, b);
             }
-            put_block(next);
+            put_block(heap, next);
         }
     }
 
     if (b->prev != BLOCK_NIL) {
-        struct block* prev = get_block_addr(b->prev);
+        struct block* prev = get_block_addr(heap, b->prev);
 
         if (prev->occupied == false) {
             prev->next = b->next;
             prev->size += b->size;
             if (b->next != BLOCK_NIL) {
-                struct block* new_next = get_block_addr(b->next);
+                struct block* new_next = get_block_addr(heap, b->next);
                 new_next->prev = b->prev;
             }
-            put_block(b);
+            put_block(heap, b);
         }
     }
 
 }
 
-void kfree(void* ptr)
+void heap_free(struct mem_alloc* heap, void* ptr)
 {
-    mutex_lock(&alloc_mut);
-    struct block* current = get_block_addr(0);
-    char* base = block_base;
+    mutex_lock(&heap->alloc_mut);
+    struct block* current = get_block_addr(heap, 0);
+    char* base = heap->block_base;
     do {
         
         if (base == ptr) {
             current->occupied = false;
-            try_coalesce(current);
+            try_coalesce(heap, current);
             break;
         }
 
@@ -180,8 +165,8 @@ void kfree(void* ptr)
             break;
         }
         base += current->size;
-        current = get_block_addr(current->next);
+        current = get_block_addr(heap, current->next);
     } while(1);
-    mutex_unlock(&alloc_mut);
+    mutex_unlock(&heap->alloc_mut);
 }
 

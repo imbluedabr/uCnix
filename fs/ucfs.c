@@ -1,5 +1,5 @@
 #include <fs/ucfs.h>
-#include <kernel/alloc.h>
+#include <lib/kmalloc.h>
 #include <lib/stdlib.h>
 #include <lib/kprint.h>
 #include <uapi/sys/errno.h>
@@ -19,6 +19,9 @@ ssize_t ucfs_read(struct file* f, char* buff, int count)
 {
     struct inode* i = f->i;
     struct ucfs_filesystem* fs = (struct ucfs_filesystem*) i->fs;
+    
+    if (count > i->size) count = i->size;
+
     //read the indirect block
     int n_read = device_read(fs->dev, fs->scratch_buffer, 1, fs->data_block_offset + i->ucfs.indirect_block);    
     if (n_read < 0) return n_read;
@@ -31,7 +34,10 @@ ssize_t ucfs_read(struct file* f, char* buff, int count)
     
     uint32_t bytes_read = 0;
     uint8_t current_block = block_offset;
-
+    if (fs->indirect_buffer[current_block] == BLOCK_NIL) {
+        return 0;
+    }
+  
     if (byte_offset != 0) {
         device_read(fs->dev, fs->scratch_buffer, 1, fs->data_block_offset + fs->indirect_buffer[current_block]);
         current_block++;
@@ -56,8 +62,9 @@ ssize_t ucfs_read(struct file* f, char* buff, int count)
 
     if ((count - bytes_read) > 0) {
         int to_read = count - bytes_read;
-        device_read(fs->dev, fs->scratch_buffer, 1, fs->indirect_buffer[current_block++]);
+        device_read(fs->dev, fs->scratch_buffer, 1, fs->data_block_offset + fs->indirect_buffer[current_block++]);
         memcpy(buff + bytes_read, fs->scratch_buffer, to_read);
+        bytes_read += to_read;
     }
 
     return bytes_read;
@@ -81,11 +88,12 @@ int ucfs_readdir(struct file* f, struct dirent* buff, int count)
     for (int i = 0; i < fs->entries_per_dir; i++) {
         struct ucfs_file* entry = &dir[i];
         if (entry->ino != 255) {
-            strlcpy(buff[i].d_name, entry->name, FS_INAME_LEN);
-            buff[i].d_namelen = strnlen(entry->name, FS_INAME_LEN);
-            buff[i].d_ino = FS_MAKE_UNO(fs->base.fsid, entry->ino);
+            strlcpy(buff[d_count].d_name, entry->name, FS_INAME_LEN);
+            buff[d_count].d_namelen = strnlen(entry->name, FS_INAME_LEN);
+            buff[d_count].d_ino = FS_MAKE_UNO(fs->base.fsid, entry->ino);
             d_count++;
         }
+        if (d_count >= count) break;
     }
 
     return d_count;
@@ -121,22 +129,26 @@ int ucfs_mount(struct inode* mountpoint, dev_t devno, int mountflags)
         kfree(ucfs);
         return -ENODEV;
     }
+    int e_code;
 
     ucfs->scratch_buffer = kmalloc(sector_size);
+    ucfs->indirect_buffer = kmalloc(256);
+    if (!ucfs->scratch_buffer || !ucfs->indirect_buffer) {
+        e_code = -ENOMEM;
+        goto error;
+    }
     if (device_read(dev, ucfs->scratch_buffer, 1, 1) < 0) { //read the superblock
-        kfree(ucfs->scratch_buffer);
-        kfree(ucfs);
-        return -EIO;
+        e_code = -EIO;
+        goto error;
     }
 
     struct ucfs_superblock* sb = ucfs->scratch_buffer;
 
     kdbg("ucfs: magic=%s\n", sb->magic);
     if (sb->block_size != sector_size) {
-        kfree(ucfs->scratch_buffer);
-        kfree(ucfs);
         kerr("ucfs: block sizes other then %d are not suported(yet)!\n", sector_size);
-        return -EIO;
+        e_code = -EIO;
+        goto error;
     }
     
     ucfs->inode_block_offset = 2; //sector 0 is the boot sector, sector 1 is the superblock
@@ -149,7 +161,13 @@ int ucfs_mount(struct inode* mountpoint, dev_t devno, int mountflags)
     mountpoint->fs = &ucfs->base;
     mountpoint->ino = 0;
     mountpoint->ucfs.indirect_block = 0;
+    mountpoint->perm.mode |= S_IFDIR;
     return 0;
+error:
+    kfree(ucfs->scratch_buffer);
+    kfree(ucfs->indirect_buffer);
+    kfree(ucfs);
+    return e_code;
 }
 
 //int (*umount)(struct superblock* fs);
@@ -183,12 +201,11 @@ struct inode* ucfs_read_i(struct filesystem* fs, ino_t ino)
     struct ucfs_filesystem* ucfs = (struct ucfs_filesystem*) fs;
     //calculate the offets of the inode
     int local_ino = FS_GET_INO(ino);
+    if (local_ino > 255) return NULL;
     int address = local_ino*sizeof(struct ucfs_inode);
     int sector = address/ucfs->base.block_size;
     int sector_offset = ucfs->inode_block_offset + sector;
     int index = local_ino - sector*32;
-    //kdbg("lba = %d\n", sector_offset);
-    kprintf("%d\n", sector_offset);
     device_read(ucfs->dev, ucfs->scratch_buffer, 1, sector_offset);
 
     struct ucfs_inode* i = &((struct ucfs_inode*) ucfs->scratch_buffer)[index];
