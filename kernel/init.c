@@ -11,6 +11,7 @@
 #include <kernel/syscall.h>
 #include <kernel/devtbl.h>
 #include <kernel/exec.h>
+#include <kernel/page.h>
 #include <fs/vfs.h>
 #include <drivers/tty.h>
 #include <drivers/hd44xxx.h>
@@ -44,15 +45,17 @@ void kernel_init_process()
         kerr("vfs: rootfs mount failed! errno=%d\n", status);
         goto abort;
     }
-    struct filesystem* fs = vfs_root.fs;
+    struct filesystem* fs = mount_table[0].root->fs;
     kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
    
     struct memstat buff;
     heap_stat(&kernel_allocator, &buff);
     kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
     
+
+    /*kinfo("init: starting userspace init\n");
     status = sys_spawn("/bin/test.bin");
-    kdbg("status=%d\n", status);
+    kdbg("status=%d\n", status);*/
 abort:
     kinfo("halting kernel...\n");
     proc_stop_scheduling();
@@ -66,6 +69,7 @@ void kernel_pre_init()
     system_init(); //initialize cache, flash and other basic board specific stuff
     interrupt_init(); //load the ram vector table
     kmalloc_init(__heap_start, 2048); //initialize the heap
+    page_init();
     time_init();
     device_init();
     proc_init();
@@ -100,7 +104,7 @@ const process_desc_t kernel_init_proc = {
             .writer = INIT_CONSOLE_WDEV
             });
     
-    kprintf("\e[1;39m%s %s %s %s\n", uname.sysname, uname.release, uname.version, uname.machine);
+    kprintf("\e[1;35m%s %s %s %s\n\e[1;39m", uname.sysname, uname.release, uname.version, uname.machine);
     
 
     struct device* dev = device_lookup(MKDEV(HD44XXX_MAJOR, 0));

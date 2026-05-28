@@ -44,7 +44,7 @@ int ucfs_readdir(struct file* f, struct dirent* buff, int count);
 //off_t (*ftruncate)(struct file* f, off_t lenght);
 
 //inode operations
-int ucfs_mount(struct inode* mountpoint, dev_t devno, int mountflags);
+int ucfs_mount(struct mount* mountpoint, dev_t devno, int mountflags);
 //int (*umount)(struct superblock* fs);
 //int (*statfs)(struct superblock* fs);
 

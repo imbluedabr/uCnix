@@ -6,6 +6,7 @@
 #define BOARD_TYPE mcxa153
 #define BOARD_ARCH "armv8-m"
 #define VFS_MAXFILES 32
+#define VFS_MAXMOUNTS 2
 #define PROC_MAXFILES 32
 #define PROC_MAX_PROC 4
 #define PROC_KSTACK_SIZE 384

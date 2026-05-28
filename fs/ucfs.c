@@ -20,7 +20,7 @@ ssize_t ucfs_read(struct file* f, char* buff, int count)
     struct inode* i = f->i;
     struct ucfs_filesystem* fs = (struct ucfs_filesystem*) i->fs;
     
-    if (count > i->size) count = i->size;
+    if ((count + f->offset) > i->size) count = i->size - f->offset;
 
     //read the indirect block
     int n_read = device_read(fs->dev, fs->scratch_buffer, 1, fs->data_block_offset + i->ucfs.indirect_block);    
@@ -104,7 +104,7 @@ int ucfs_readdir(struct file* f, struct dirent* buff, int count)
 //off_t (*ftruncate)(struct file* f, off_t lenght);
 
 //inode operations
-int ucfs_mount(struct inode* mountpoint, dev_t devno, int mountflags)
+int ucfs_mount(struct mount* mountpoint, dev_t devno, int mountflags)
 {
     struct ucfs_filesystem* ucfs = kzalloc(sizeof(struct ucfs_filesystem));
     if (!ucfs) {
@@ -158,10 +158,12 @@ int ucfs_mount(struct inode* mountpoint, dev_t devno, int mountflags)
     ucfs->base.block_used = sb->block_used;
     ucfs->entries_per_dir = sector_size/sizeof(struct file);
 
-    mountpoint->fs = &ucfs->base;
-    mountpoint->ino = 0;
-    mountpoint->ucfs.indirect_block = 0;
-    mountpoint->perm.mode |= S_IFDIR;
+    mountpoint->root = ucfs_read_i(&ucfs->base, 0);
+    kdbg("ucfs: read root inode\n");
+    if (!mountpoint->root) {
+        e_code = -EIO;
+        goto error;
+    }
     return 0;
 error:
     kfree(ucfs->scratch_buffer);

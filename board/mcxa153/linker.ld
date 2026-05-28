@@ -74,8 +74,8 @@ SECTIONS
 
   .userspace :
   {
-    . = ALIGN(8);
     __userspace_start = .;
-    . = ALIGN(8);
+    . += __userspace_size;
+    __userspace_end = .;
   } > m_srama1x0
 }

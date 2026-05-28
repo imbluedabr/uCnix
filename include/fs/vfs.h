@@ -84,7 +84,7 @@ struct file_ops {
     off_t (*ftruncate)(struct file* f, off_t lenght);
 
     //filesystem operations
-    int (*mount)(struct inode* mountpoint, dev_t devno, int mountflags);
+    int (*mount)(struct mount* mountpoint, dev_t devno, int mountflags);
     int (*umount)(struct filesystem* fs);
     int (*statfs)(struct filesystem* fs);
     
@@ -108,7 +108,7 @@ void inode_free(struct inode* i);
 void file_free(struct file* f);
 
 extern struct file vfs_file_table[VFS_MAXFILES];
-extern struct inode vfs_root;
+extern struct mount mount_table[VFS_MAXMOUNTS];
 
 void vfs_init();
 int vfs_get_fsid();

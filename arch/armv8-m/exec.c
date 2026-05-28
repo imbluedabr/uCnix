@@ -1,12 +1,14 @@
 #include <kernel/exec.h>
 #include <kernel/tiny_exec.h>
 #include <kernel/proc.h>
+#include <kernel/page.h>
 #include <fs/vfs.h>
 #include <lib/kprint.h>
 #include <lib/stdlib.h>
 
 #include <uapi/sys/fcntl.h>
 #include <uapi/sys/errno.h>
+#include <stdint.h>
 
 int sys_spawn(const char* path)
 {
@@ -26,8 +28,26 @@ int sys_spawn(const char* path)
     if (header.arch != ARMV8_M_MAIN) goto fmt_error;
     if (TINY_EXEC_OSABI_MAJOR(header.os_abi) != 1) goto fmt_error;
     
-    
+    uint8_t* program_base = page_alloc(header.program_break);
 
+    kdbg("base=0x%x\n", (uint32_t) program_base);
+    
+    vfs_lseek(fd, 0, 0);
+    count = vfs_read(fd, program_base, header.program_break);
+    kdbg("bytes_loaded=%d\n", count);
+    vfs_close(fd);
+
+    
+    process_desc_t new = {
+        .user_stack = program_base + (header.program_break - header.stack_size),
+        .size = header.stack_size,
+        .entry_point = (void (*)(void)) program_base + header.entry_point,
+        .stopped = 0,
+        .kernel_mode = 0
+    };
+
+    proc_create(&new);
+    
     return 0;
 
 fmt_error:

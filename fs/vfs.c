@@ -15,6 +15,8 @@ static struct inode* cache_list;
 static uint8_t cache_list_size;
 static uint8_t free_list_size;
 
+struct mount mount_table[VFS_MAXMOUNTS];
+
 //you must hold this lock when you use an inode
 mutex_t vfs_cache_lock;
 
@@ -87,8 +89,6 @@ const struct file_ops* fs_table[4] = {
 const char* fs_name_table[4] = {
     "ucfs"
 };
-
-struct inode vfs_root;
 
 struct file vfs_file_table[VFS_MAXFILES];
 uint8_t file_table_free[VFS_MAXFILES];
@@ -187,6 +187,25 @@ static inline struct inode* vfs_read_inode(struct filesystem* fs, ino_t ino)
     return fs->fops->read_i(fs, ino);
 }
 
+static inline struct inode* check_mount(struct inode* node) {
+
+    mutex_lock(&vfs_cache_lock);
+
+    if (node->perm.mode & S_IFMNT) {
+        for (int i = 0; i < VFS_MAXMOUNTS; i++) {
+            if (mount_table[i].mountpoint == node) {
+                struct inode* root = mount_table[i].root;
+                mutex_unlock(&vfs_cache_lock);
+                inode_free(node);
+                return root;
+            }
+        }
+        thread_panic("mount without mountpoint!\n");
+    }
+    mutex_unlock(&vfs_cache_lock);
+    return node;
+}
+
 struct inode* vfs_walk_path(const char* path, int mode)
 {
     int path_idx = 0;
@@ -197,7 +216,7 @@ struct inode* vfs_walk_path(const char* path, int mode)
     
     //absolute path
     if (*path == '/') {
-        current_dir = &vfs_root;
+        current_dir = mount_table[0].root;
         path_idx++;
         current_word++;
     } else {
@@ -220,7 +239,9 @@ struct inode* vfs_walk_path(const char* path, int mode)
             struct inode* next = vfs_read_inode(current_dir->fs, ino);
             if (!next) goto error;
             inode_free(current_dir);
-            current_dir = next;
+            current_dir = check_mount(next);
+            
+            
             current_word = path_cpy + path_idx + 1;
         }
         path_idx++;
@@ -245,9 +266,39 @@ int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags)
     struct file_ops* fops = get_filesystem(filesystemtype);
     if (!fops) return -ENODEV;
 
-    int status = fops->mount(&vfs_root, devno, mountflags);
+    int status = fops->mount(&mount_table[0], devno, mountflags);
 
     return status;
+}
+
+int vfs_mount_dev(const char* path, const char* filesystemtype, int mountflags)
+{
+    struct file_ops* fops = get_filesystem(filesystemtype);
+    if (!fops) return -ENODEV;
+
+    struct inode* node = vfs_walk_path(path, 0);
+    if (!node) return -ENOENT;
+
+    if (!(node->perm.mode & S_IFDIR)) {
+        inode_free(node);
+        return -ENOTDIR;
+    }
+
+    for (int i = 0; i < VFS_MAXMOUNTS; i++) {
+        struct mount* m = &mount_table[i];
+        if (m->root == NULL) {
+            m->mountpoint = node;
+            int status = fops->mount(m, 0, mountflags);
+            if (status < 0) {
+                inode_free(node);
+                m->mountpoint = NULL;
+                return status;
+            }
+            return 0;
+        }
+    }
+    inode_free(node);
+    return -ENOMEM;
 }
 
 int check_access(cred_t credentials, struct permissions* perm, int mode)
@@ -332,7 +383,16 @@ int vfs_fstat(int fd, struct stat *statbuf)
 
 off_t vfs_lseek(int fd, off_t offset, int whence)
 {
-    
+    struct file* f = proc_fd_get(current_process, fd);
+    if (!f) return -EBADF;
+
+    if (whence == 0) {
+        mutex_lock(&vfs_file_lock);
+        f->offset = offset;
+        mutex_unlock(&vfs_file_lock);
+        return offset;
+    }
+    return 0;
 }
 
 int vfs_ioctl(int fd, int cmd, void* arg)

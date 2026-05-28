@@ -16,6 +16,7 @@ $(shell echo "#define INIT_CONSOLE_WDEV $(CONFIG_INIT_CONSOLE_WDEV)" >> $(SETTIN
 $(shell echo "#define BOARD_TYPE $(CONFIG_BOARD_TYPE)" >> $(SETTINGS_FILE))
 $(shell echo "#define BOARD_ARCH \"$(CONFIG_BOARD_ARCH)\"" >> $(SETTINGS_FILE))
 $(shell echo "#define VFS_MAXFILES $(CONFIG_VFS_MAXFILES)" >> $(SETTINGS_FILE))
+$(shell echo "#define VFS_MAXMOUNTS $(CONFIG_VFS_MAXMOUNTS)" >> $(SETTINGS_FILE))
 $(shell echo "#define PROC_MAXFILES $(CONFIG_PROC_MAXFILES)" >> $(SETTINGS_FILE))
 $(shell echo "#define PROC_MAX_PROC $(CONFIG_PROC_MAX_PROC)" >> $(SETTINGS_FILE))
 $(shell echo "#define PROC_KSTACK_SIZE $(CONFIG_PROC_KSTACK_SIZE)" >> $(SETTINGS_FILE))
@@ -26,7 +27,7 @@ ARCH = armv8-m
 BOARD = mcxa153
 TOOLCHAIN = arm-none-eabi
 ARCH_CFLAGS = -mthumb -mcpu=cortex-m33+nodsp -mfloat-abi=soft -std=gnu11 -DCPU_MCXA153VFM
-ARCH_LDFLAGS = -mthumb -mcpu=cortex-m33+nodsp
+ARCH_LDFLAGS = -mthumb -mcpu=cortex-m33+nodsp -Wl,-z,max-page-size=4
 $(shell echo "#define BOARD_MCXA153" >> $(SETTINGS_FILE))
 endif
 

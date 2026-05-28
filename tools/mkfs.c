@@ -162,6 +162,7 @@ void ucfs_mkroot(struct ucfs_file* root)
     struct ucfs_inode* i = inode_read(ino);
     i->indirect_block = block_alloc();
     i->nlinks = 1;
+    i->perm.mode = FS_IFDIR | FS_IRUSR | FS_IXUSR;
 
     root->ino = ino;
 

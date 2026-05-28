@@ -2,8 +2,8 @@
 #include <lib/stdlib.h>
 
 struct mem_alloc kernel_allocator;
-struct block blk_array[64];
-uint8_t unused_blocks[64];
+static struct block blk_array[64];
+static uint8_t unused_blocks[64];
 
 void kmalloc_init(void* heap_base, int heap_size)
 {

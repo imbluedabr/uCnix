@@ -11,6 +11,7 @@
 #define S_IFMNT     (0b0011 << 12)
 #define S_IFDEV     (0b0100 << 12)
 #define S_IFSOCK    (0b0101 << 12)
+#define S_IFVIRT    (0b0110 << 12)
 
 #define S_ISUID     (0b100 << 9)
 #define S_ISGID     (0b010 << 9)
