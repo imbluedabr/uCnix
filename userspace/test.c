@@ -1,17 +1,25 @@
 #include <stdint.h>
 
+#define SVCALL(SVCNO) __asm volatile( \
+            "svc #" #SVCNO "\nbx lr" \
+            )
+
 [[gnu::naked]] int write(int fd, const void* buffer, int count) {
-    __asm volatile(
-        "svc #0\n"
-            "bx lr"
-    );
+    SVCALL(1);
+}
+
+[[gnu::naked]] void exit(int exit_code) {
+    SVCALL(43);
 }
 
 
 int main() {
-    
-    write(0, "Hello world!\n", 13);
 
+    //__asm volatile ("bkpt\n");
+
+    write(0, "Hello world!\n", 13);
+    
+    exit(0);
     while(1);
 }
 

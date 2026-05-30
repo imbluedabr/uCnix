@@ -21,6 +21,10 @@ struct file_ops;
 //retrieve inode number
 #define FS_GET_INO(INO) (INO & 0xFFFFFF)
 
+#define FS_MAKE_PERM(OWNER, GROUP, MODE) ((struct permissions) { .user = OWNER, .group = GROUP, .mode = MODE})
+#define FS_SET_FTYPE(PERM, TYPE) (PERM.mode = (PERM.mode & (07777)) | TYPE)
+#define FS_GET_FTYPE(PERM) (PERM.mode & 070000)
+
 #define VFS_LOOKUP_BASE 1
 
 struct permissions {
@@ -38,7 +42,7 @@ struct inode {
     uint32_t refcount : 8;
     union {
         struct { //filesystem specific metadata
-            dev_t devno;
+            struct device* dev;
         } devfs;
         struct {
             uint8_t indirect_block;
@@ -87,9 +91,9 @@ struct file_ops {
     int (*mount)(struct mount* mountpoint, dev_t devno, int mountflags);
     int (*umount)(struct filesystem* fs);
     int (*statfs)(struct filesystem* fs);
+    int (*mknod)(struct filesystem* fs, const char* name, struct permissions perm, dev_t devno);
     
     //inode operations
-    struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
     int (*link)(struct inode* dir, struct inode* target, const char* name);
     int (*unlink)(struct inode* dir, const char* name);
     int (*close)(struct inode* targer);
@@ -115,6 +119,7 @@ int vfs_get_fsid();
 struct inode* vfs_walk_path(const char* path, int mode);
 struct file_ops* get_filesystem(const char* name);
 int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags);
+int vfs_mount_dev(const char* path, const char* filesystemtype, int mountflags);
 
 
 ssize_t vfs_read(int fd, void* buffer, size_t count);
@@ -127,21 +132,17 @@ int vfs_ioctl(int fd, int cmd, void* arg);
 int vfs_access(const char* path, int mode);
 int vfs_select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* timeout);
 int vfs_fcntl(int fd, int op, int arg);
-int vfs_flock(int fd, int op);
-int vfs_fsync(int fd);
 int vfs_ftruncate(int fd, off_t lenght);
 int vfs_chdir(const char* path);
 ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count);
 int vfs_mkdir(const char* path, mode_t mode);
 int vfs_rmdir(const char* path);
-int vfs_rename(const char* oldpath, const char* newpath);
+int vfs_link(const char* oldpath, const char* newpath);
 int vfs_unlink(const char* path);
-int vfs_symlink(const char* target, const char* linkpath);
-int vfs_readlink(const char* path, char* buf, size_t bufsiz);
+int vfs_mknod(const char* path, mode_t mode, dev_t devno);
 int vfs_fstatfs(int fd, struct statfs* buf);
 int vfs_fchmod(int fd, mode_t mode);
 int vfs_fchown(int fd, uid_t owner, gid_t group);
 int vfs_sync();
 int vfs_mount(const char* source, const char* target, const char* filesystemtype, int mountflags);
 int vfs_umount(const char* target);
-int vfs_statfs(const char* path, struct statfs* buff);

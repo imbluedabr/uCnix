@@ -2,15 +2,17 @@
 #include <kernel/tiny_exec.h>
 #include <kernel/proc.h>
 #include <kernel/page.h>
+#include <kernel/interrupt.h>
 #include <fs/vfs.h>
 #include <lib/kprint.h>
 #include <lib/stdlib.h>
 
 #include <uapi/sys/fcntl.h>
 #include <uapi/sys/errno.h>
+#include <uapi/signal.h>
 #include <stdint.h>
 
-int sys_spawn(const char* path)
+int sys_spawn(const char* path, fd_set fd_list)
 {
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0) return fd;
@@ -42,17 +44,62 @@ int sys_spawn(const char* path)
         .user_stack = program_base + (header.program_break - header.stack_size),
         .size = header.stack_size,
         .entry_point = (void (*)(void)) program_base + header.entry_point,
-        .stopped = 0,
+        .stopped = 1,
         .kernel_mode = 0
     };
 
-    proc_create(&new);
+    struct proc* p = proc_create(&new);
+    p->ppid = current_process->pid;
     
-    return 0;
+    for (int i = 0; i < FD_SETSIZE; i++) {
+        if (FD_ISSET(i, fd_list)) {
+            struct file* f = proc_fd_get(current_process, i);
+            if (!f) continue;
+            f->refcount++;
+            proc_fd_add(p, f);
+        }
+    }
+
+    proc_unblock_process(p);
+
+    return p->pid;
 
 fmt_error:
     vfs_close(fd);
     return -ENOEXEC;
+}
+
+int sys_kill(pid_t pid, int sig)
+{
+    struct proc* p = proc_get_process(pid);
+    if (!p) return -ESRCH;
+    
+    if (current_process->credentials.euid == p->credentials.euid || current_process->credentials.egid == p->credentials.egid) {
+        return proc_kill(pid, sig);
+    }
+    return -EPERM;
+}
+
+void sys_exit(int return_code)
+{
+    disable_interrupts();
+    proc_mark_zombie(current_process, return_code);
+    proc_kill(current_process->ppid, SIGCHLD);
+}
+
+pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
+{
+    proc_block(current_process);
+    kputs("wow");
+    struct proc* p = proc_active_list;
+    while(p) {
+        if (p->pid == pid) {
+            *wstatus = proc_reap(p);
+            return pid;
+        }
+    }
+    *wstatus = -1;
+    return 0;
 }
 
 

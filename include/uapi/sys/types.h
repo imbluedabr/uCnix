@@ -9,7 +9,7 @@
 
 typedef int ino_t; //this is a unique identifier for an inode, this would be like the cluster + offset in fat
 typedef uint32_t off_t;
-typedef uint32_t ssize_t;
+typedef int32_t ssize_t;
 typedef uint8_t dev_t;
 typedef uint8_t pid_t;
 typedef uint8_t uid_t;

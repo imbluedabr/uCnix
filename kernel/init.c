@@ -18,6 +18,7 @@
 #include <drivers/romdisk.h>
 #include <drivers/usart.h>
 #include <lib/kmalloc.h>
+#include <lib/stdlib.h>
 #include <uapi/sys/fcntl.h>
 #include <uapi/sys/disk.h>
 #include <uapi/sys/dir.h>
@@ -47,21 +48,50 @@ void kernel_init_process()
     }
     struct filesystem* fs = mount_table[0].root->fs;
     kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
-   
+    
+    kinfo("vfs: mounting devfs on /dev\n");
+    status = vfs_mount_dev("/dev", "devfs", 0);
+    if (status < 0) {
+        kerr("vfs: devfs mount failed! errno=%d\n", status);
+        goto abort;
+    }
+    struct filesystem* devfs = mount_table[1].root->fs;
+    devfs->fops->mknod(devfs, "tty0", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 0));
+
+    int fd = vfs_open("/dev/tty0", O_RDWR);
+    
     struct memstat buff;
     heap_stat(&kernel_allocator, &buff);
     kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
     
 
-    /*kinfo("init: starting userspace init\n");
-    status = sys_spawn("/bin/test.bin");
-    kdbg("status=%d\n", status);*/
+    kinfo("init: starting userspace init\n");
+    fd_set fd_list;
+    FD_ZERO(fd_list);
+    FD_SET(fd, fd_list);
+    status = sys_spawn("/bin/test.bin", fd_list);
+
+    sys_waitpid(2, &status, 0);
+
+    kdbg("status=%d\n", status);
+    
+    
+    kinfo("proc: PID:PPID:STAT\n");
+    struct proc* p = proc_active_list;
+    while(p) {
+        kinfo("%d\t%d\t%d\n", (int) p->pid, (int) p->ppid, (int) p->state);
+        p = p->next;
+    }
+    
+
 abort:
-    kinfo("halting kernel...\n");
+    //kinfo("halting kernel...\n");
     proc_stop_scheduling();
     enable_interrupts(0); //hack
+    kinfo("kernel halted!");
     while (1) {
-    }
+        __WFI();
+    };
 }
 
 void kernel_pre_init()
@@ -106,12 +136,6 @@ const process_desc_t kernel_init_proc = {
     
     kprintf("\e[1;35m%s %s %s %s\n\e[1;39m", uname.sysname, uname.release, uname.version, uname.machine);
     
-
-    struct device* dev = device_lookup(MKDEV(HD44XXX_MAJOR, 0));
-    dev->driver->writeb(dev, 'D');
-    boot_console = dev;
-    kputs("yeet");
-    boot_console = device_lookup(MKDEV(TTY_MAJOR, 0));
     devtbl_init();
 
     kinfo("init: starting kernel worker\n");
@@ -119,7 +143,7 @@ const process_desc_t kernel_init_proc = {
     
     kinfo("init: starting kernel init\n");
     struct proc* p = proc_create(&kernel_init_proc);
-    p->sigmask = 1 << SIGCONT; //enable sigcont signal
+    p->sigmask = 1 << SIGCHLD; //enable sigcont signal
 
     proc_start_scheduling();
     while(1);

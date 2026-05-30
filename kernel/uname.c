@@ -7,7 +7,7 @@
 struct utsname uname = {
     .sysname = "uCnix",
     .nodename = "",
-    .release = "0.3.4",
+    .release = "0.3.6",
     .version = __DATE__,
     .machine = BOARD_ARCH " " TOSTRING(BOARD_TYPE)
 };

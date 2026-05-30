@@ -9,6 +9,7 @@
 #include <kernel/panic.h>
 #include <lib/stdlib.h>
 #include <lib/kmalloc.h>
+#include <lib/kprint.h>
 
 static struct inode* free_list;
 static struct inode* cache_list;
@@ -29,15 +30,18 @@ mutex_t vfs_cache_lock;
 struct inode* inode_alloc()
 {
     mutex_lock(&vfs_cache_lock);
+    struct inode* i;
     if (!free_list) {
-        return kmalloc(sizeof(struct inode));
+        i = kmalloc(sizeof(struct inode));
+    } else {
+        i = free_list;
+        free_list = i->next;
+        free_list_size--;
     }
+    if (!i) return NULL;
 
-    struct inode* i = free_list;
-    free_list = i->next;
     i->next = cache_list;
     cache_list = i;
-    free_list_size--;
     cache_list_size++;
     i->refcount = 1;
 
@@ -83,11 +87,13 @@ int vfs_get_fsid()
 }
 
 const struct file_ops* fs_table[4] = {
-    &ucfs_file_ops
+    &ucfs_file_ops,
+    &devfs_file_ops
 };
 
 const char* fs_name_table[4] = {
-    "ucfs"
+    "ucfs",
+    "devfs"
 };
 
 struct file vfs_file_table[VFS_MAXFILES];
@@ -136,6 +142,17 @@ struct file_ops* get_filesystem(const char* name)
     return NULL;
 }
 
+const char* get_last_name(const char* path)
+{
+    if (*path == '/') path++;
+    const char* word = path;
+    while (*path) {
+        if (*path++ == '/') {
+            word = path;
+        }
+    }
+    return word;
+}
 
 
 void vfs_init()
@@ -191,10 +208,11 @@ static inline struct inode* check_mount(struct inode* node) {
 
     mutex_lock(&vfs_cache_lock);
 
-    if (node->perm.mode & S_IFMNT) {
+    if (FS_GET_FTYPE(node->perm) == S_IFMNT) {
         for (int i = 0; i < VFS_MAXMOUNTS; i++) {
-            if (mount_table[i].mountpoint == node) {
-                struct inode* root = mount_table[i].root;
+            struct mount* m = &mount_table[i];
+            if (m->mountpoint == node) {
+                struct inode* root = m->root;
                 mutex_unlock(&vfs_cache_lock);
                 inode_free(node);
                 return root;
@@ -267,7 +285,6 @@ int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags)
     if (!fops) return -ENODEV;
 
     int status = fops->mount(&mount_table[0], devno, mountflags);
-
     return status;
 }
 
@@ -287,13 +304,13 @@ int vfs_mount_dev(const char* path, const char* filesystemtype, int mountflags)
     for (int i = 0; i < VFS_MAXMOUNTS; i++) {
         struct mount* m = &mount_table[i];
         if (m->root == NULL) {
-            m->mountpoint = node;
             int status = fops->mount(m, 0, mountflags);
             if (status < 0) {
                 inode_free(node);
-                m->mountpoint = NULL;
                 return status;
             }
+            m->mountpoint = node;
+            FS_SET_FTYPE(node->perm, S_IFMNT);
             return 0;
         }
     }
@@ -397,32 +414,28 @@ off_t vfs_lseek(int fd, off_t offset, int whence)
 
 int vfs_ioctl(int fd, int cmd, void* arg)
 {
+    struct file* f = proc_fd_get(current_process, fd);
+    if (!f) return -EBADF;
 
+    struct inode* i = f->i;
+    if (FS_GET_FTYPE(i->perm) != S_IFDEV) return -ENODEV;
+
+    return i->devfs.dev->driver->ioctl(i->devfs.dev, cmd, arg);
 }
 
 int vfs_access(const char* path, int mode)
 {
-
+    return -ENOSYS;
 }
 
 int vfs_select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* timeout)
 {
-    
+    return -ENOSYS;
 }
 
 int vfs_fcntl(int fd, int op, int arg)
 {
-
-}
-
-int vfs_flock(int fd, int op)
-{
-    return -ENOSYS;
-}
-
-int vfs_fsync(int fd)
-{
-
+    
 }
 
 int vfs_ftruncate(int fd, off_t lenght)
@@ -465,7 +478,7 @@ int vfs_rmdir(const char* path)
 
 }
 
-int vfs_rename(const char* oldpath, const char* newpath)
+int vfs_link(const char* oldpath, const char* newpath)
 {
 
 }
@@ -475,19 +488,27 @@ int vfs_unlink(const char* path)
 
 }
 
-int vfs_symlink(const char* target, const char* linkpath)
+int vfs_mknod(const char* path, mode_t mode, dev_t devno)
 {
+    struct inode* i = vfs_walk_path(path, VFS_LOOKUP_BASE);
+    if (!i) return -ENOENT;
+    
 
-}
-
-int vfs_readlink(const char* path, char* buf, size_t bufsiz)
-{
-
+    return i->fs->fops->mknod(i->fs, get_last_name(path), FS_MAKE_PERM(0, 0, mode), devno);
 }
 
 int vfs_fstatfs(int fd, struct statfs* buf)
 {
+    struct file* f = proc_fd_get(current_process, fd);
+    if (!f) return -EBADF;
 
+    struct filesystem* fs = f->i->fs;
+    
+    buf->f_bsize = fs->block_size;
+    buf->f_blocks = fs->block_count;
+    buf->f_bfree = fs->block_count - fs->block_used;
+
+    return 0;
 }
 
 int vfs_fchmod(int fd, mode_t mode)

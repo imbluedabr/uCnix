@@ -1,7 +1,7 @@
 
 TOOLCHAIN = arm-none-eabi
-CFLAGS = -ffreestanding -Wall -mthumb -mcpu=cortex-m33+nodsp -mfloat-abi=soft -std=gnu11 -pie
-LDFLAGS = -nostartfiles -nostdlib -static-pie -mthumb -mcpu=cortex-m33+nodsp -T test.ld
+CFLAGS = -Os -ffreestanding -Wall -mthumb -mcpu=cortex-m33+nodsp -mfloat-abi=soft -std=gnu11 -fpie
+LDFLAGS = -Os -nostartfiles -nostdlib -static-pie -mthumb -mcpu=cortex-m33+nodsp -T test.ld
 
 TOOLCHAIN = arm-none-eabi
 
@@ -16,7 +16,7 @@ crt0.o: crt0.S
 test.elf: test.o crt0.o
 	$(CC) $(LDFLAGS) test.o crt0.o -o test.elf
 
-test.bin:
+test.bin: test.elf
 	$(TOOLCHAIN)-objcopy -O binary test.elf test.bin
 
 install: test.bin

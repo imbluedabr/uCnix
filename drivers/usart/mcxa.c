@@ -52,29 +52,33 @@ void usart_mcxa_init(struct usart_device* usart, struct usart_desc* desc)
 }
 
 int usart_mcxa_readb(struct usart_device* usart)
-{   
+{
+    __disable_irq();
     if (usart->rx_tail == usart->rx_head) {
+        __enable_irq();
         return -1;
     }
 
     uint8_t tmp = (usart->rx_tail + 1) & USART_RX_FIFO_MSK;
     usart->rx_tail = tmp;
-
+    __enable_irq();
     return usart->rx_fifo[tmp];
 }
 
 int usart_mcxa_writeb(struct usart_device* usart, uint8_t val)
 {
+    __disable_irq();
     uint8_t tmp = (usart->tx_head + 1) & USART_TX_FIFO_MSK;
     if (tmp == usart->tx_tail) {
+        __enable_irq();
         return -1;
     }
     usart->tx_head = tmp;
     usart->tx_fifo[tmp] = val;
     volatile LPUART_Type* lpuart = usart->usart_base;
     lpuart->CTRL |= LPUART_CTRL_TIE_MASK;
+    __disable_irq();
     return 0;
-
 }
 
 int usart_mcxa_ioctl(struct usart_device* usart, int op, void* arg)

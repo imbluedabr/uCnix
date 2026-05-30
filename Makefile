@@ -32,7 +32,7 @@ $(shell echo "#define BOARD_MCXA153" >> $(SETTINGS_FILE))
 endif
 
 # the filesystems
-FS_SELECT = fs/vfs.c
+FS_SELECT = fs/vfs.c fs/devfs.c
 
 ifeq ($(CONFIG_FS_UCFS), y)
 FS_SELECT += fs/ucfs.c

@@ -26,6 +26,7 @@ int devfs_readdir(struct file* f, struct dirent* buff, int count);
 int devfs_mount(struct mount* mountpoint, dev_t devno, int mountflags);
 //int (*umount)(struct superblock* fs);
 //int (*statfs)(struct superblock* fs);
+int devfs_mknod(struct filesystem* fs, const char* name, struct permissions perm, dev_t devno);
 
 //struct inode* (*create)(struct inode* dir, const char* name, struct permissions perm);
 //int (*remove)(struct inode* target);

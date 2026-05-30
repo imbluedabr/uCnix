@@ -104,20 +104,14 @@ end:
 
 static void tty_write(struct tty_device* tty, struct io_request* req)
 {
-    
     int bytes_copied = tty->bytes_copied;
-    struct device* writer = tty->writer;
     
     while (bytes_copied < req->count) {
-        char c = ((char*) req->buffer)[bytes_copied++];
-        if (writer->driver->writeb(writer, c) < 0) {
+        char c = ((char*) req->buffer)[bytes_copied];
+        if (tty_writeb(&tty->base, c) < 0) {
             break;
         }
-        if (c == '\n' && (tty->mode.c_cflag & CNLRET)) {
-            if (writer->driver->writeb(writer, '\r') < 0) {
-                break;
-            }
-        }
+        bytes_copied++;
     }
 
     tty->bytes_copied = bytes_copied;
@@ -148,7 +142,8 @@ int tty_writeb(struct device* dev, char c)
         return -1;
     }
 
-    return writer->driver->writeb(writer, c);
+    int res = writer->driver->writeb(writer, c);
+    return res;
 }
 
 void tty_update(struct device* dev)
@@ -165,7 +160,6 @@ void tty_update(struct device* dev)
     } else {
         tty_read(tty, current_req);
     }
-
 }
 
 

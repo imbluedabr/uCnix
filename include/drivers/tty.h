@@ -1,5 +1,6 @@
 #pragma once
 #include <kernel/device.h>
+#include <kernel/lock.h>
 #include <uapi/sys/termios.h>
 
 struct tty_desc {
