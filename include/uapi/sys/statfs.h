@@ -12,3 +12,6 @@ struct statfs {
     fsid_t f_fsid;
 };
 
+int statfs(const char* path, struct statfs* buf);
+int fstatfs(int fd, struct statfs* buf);
+

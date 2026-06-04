@@ -1,4 +1,5 @@
 #pragma once
+#include "sys/types.h"
 
 #define SIGHUP 1
 #define SIGINT 2
@@ -23,4 +24,5 @@
 #define SIGTTOU 22
 #define SIGIO 23
 
+int kill(pid_t pid, int sig);
 

@@ -129,7 +129,7 @@ CC = $(TOOLCHAIN)-gcc
 OBJCOPY = $(TOOLCHAIN)-objcopy
 READELF = $(TOOLCHAIN)-readelf
 
-.PHONY: userspace install tools
+.PHONY: userspace install tools rootfs.bin
 
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -138,6 +138,9 @@ $(BUILD)/%.o: %.c
 $(BUILD)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(ASFLAGS) -c $< -o $@
+
+rootfs.bin:
+	$(ROOT)/tools/mkfs.elf $(ROOT)/staging
 
 rootfs.o: rootfs.bin
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm rootfs.bin rootfs.o

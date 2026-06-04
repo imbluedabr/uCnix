@@ -9,6 +9,7 @@ const struct file_ops ucfs_file_ops = {
     .read = &ucfs_read,
     .write = &ucfs_write,
     .readdir = &ucfs_readdir,
+    .fstat = ucfs_fstat,
     .mount = &ucfs_mount,
     .lookup = &ucfs_lookup,
     .read_i = &ucfs_read_i
@@ -100,7 +101,35 @@ int ucfs_readdir(struct file* f, struct dirent* buff, int count)
 }
 
 //off_t (*lseek)(struct file* f, off_t offset, int whence);
-//int (*fstat)(struct file* f, struct stat* statbuf);
+int ucfs_fstat(struct file* f, struct stat* statbuf)
+{
+    struct inode* node = f->i;
+    struct ucfs_filesystem* ucfs = (struct ucfs_filesystem*) node->fs;
+    //calculate the offets of the inode
+    int local_ino = FS_GET_INO(node->ino);
+    if (local_ino > 255) return -EBADF;
+    int address = local_ino*sizeof(struct ucfs_inode);
+    int sector = address/ucfs->base.block_size;
+    int sector_offset = ucfs->inode_block_offset + sector;
+    int index = local_ino - sector*32;
+    device_read(ucfs->dev, ucfs->scratch_buffer, 1, sector_offset);
+
+    struct ucfs_inode* i = &((struct ucfs_inode*) ucfs->scratch_buffer)[index];
+
+    statbuf->st_dev = ucfs->base.devno;
+    statbuf->st_ino = node->ino;
+    statbuf->st_mode = node->perm.mode;
+    statbuf->st_nlink = i->nlinks;
+    statbuf->st_uid = node->perm.user;
+    statbuf->st_gid = node->perm.group;
+    statbuf->st_size = node->size;
+    statbuf->st_blksize = ucfs->base.block_size;
+    statbuf->st_atime = i->mtime;
+    statbuf->st_mtime = i->mtime;
+    statbuf->st_ctime = i->mtime;
+
+    return 0;
+}
 //off_t (*ftruncate)(struct file* f, off_t lenght);
 
 //inode operations

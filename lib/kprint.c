@@ -14,7 +14,9 @@ mutex_t console_lock;
 
 void kputc(char c)
 {
-    while(boot_console->driver->writeb(boot_console, c) == -1);
+    while(boot_console->driver->writeb(boot_console, c) == -1) {
+        boot_console->driver->update(boot_console);
+    };
 }
 
 void kputs(const char *str)

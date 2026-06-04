@@ -435,7 +435,19 @@ int vfs_select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, s
 
 int vfs_fcntl(int fd, int op, int arg)
 {
-    
+    struct file* f = proc_fd_get(current_process, fd);
+    if (!f) return -EBADF;
+
+    switch(op) {
+        case F_DUPFD:
+            mutex_lock(&vfs_file_lock);
+            f->refcount++;
+            mutex_unlock(&vfs_file_lock);
+            return proc_fd_add(current_process, f);
+            break;
+        default:
+            return -EINVAL;
+    }
 }
 
 int vfs_ftruncate(int fd, off_t lenght)
@@ -494,7 +506,9 @@ int vfs_mknod(const char* path, mode_t mode, dev_t devno)
     if (!i) return -ENOENT;
     
 
-    return i->fs->fops->mknod(i->fs, get_last_name(path), FS_MAKE_PERM(0, 0, mode), devno);
+    int rt = i->fs->fops->mknod(i->fs, get_last_name(path), FS_MAKE_PERM(0, 0, mode), devno);
+    inode_free(i);
+    return rt;
 }
 
 int vfs_fstatfs(int fd, struct statfs* buf)

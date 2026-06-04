@@ -17,6 +17,9 @@ int sys_spawn(const char* path, fd_set fd_list)
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0) return fd;
 
+    struct stat statbuff;
+    vfs_fstat(fd, &statbuff);
+
     tiny_exec_hdr_t header;
     int count = vfs_read(fd, &header, sizeof(tiny_exec_hdr_t));
     if (count < 0) {
@@ -31,6 +34,10 @@ int sys_spawn(const char* path, fd_set fd_list)
     if (TINY_EXEC_OSABI_MAJOR(header.os_abi) != 1) goto fmt_error;
     
     uint8_t* program_base = page_alloc(header.program_break);
+    if (!program_base) {
+        vfs_close(fd);
+        return -ENOMEM;
+    }
 
     kdbg("base=0x%x\n", (uint32_t) program_base);
     
@@ -49,14 +56,31 @@ int sys_spawn(const char* path, fd_set fd_list)
     };
 
     struct proc* p = proc_create(&new);
+    if (!p) {
+        page_free(program_base);
+        return -EAGAIN;
+    }
+
     p->ppid = current_process->pid;
+    p->program_base = program_base;
+    p->program_size = header.program_break;
+
+    //inherit the credentials of the previous process
+    p->credentials = current_process->credentials;
     
+    if (statbuff.st_mode & S_ISUID) {
+        p->credentials.euid = statbuff.st_uid;
+    }
+    if (statbuff.st_mode & S_ISGID) {
+        p->credentials.egid = statbuff.st_gid;
+    }
+
     for (int i = 0; i < FD_SETSIZE; i++) {
         if (FD_ISSET(i, fd_list)) {
             struct file* f = proc_fd_get(current_process, i);
             if (!f) continue;
             f->refcount++;
-            proc_fd_add(p, f);
+            proc_fd_set(p, i, f);
         }
     }
 
@@ -69,28 +93,35 @@ fmt_error:
     return -ENOEXEC;
 }
 
+int sys_getpid()
+{
+    return current_process->pid;
+}
+
 int sys_kill(pid_t pid, int sig)
 {
     struct proc* p = proc_get_process(pid);
     if (!p) return -ESRCH;
     
     if (current_process->credentials.euid == p->credentials.euid || current_process->credentials.egid == p->credentials.egid) {
+        proc_free_process(p);
         return proc_kill(pid, sig);
     }
+    proc_free_process(p);
     return -EPERM;
 }
 
 void sys_exit(int return_code)
 {
-    disable_interrupts();
+    proc_stop_scheduling();
     proc_mark_zombie(current_process, return_code);
     proc_kill(current_process->ppid, SIGCHLD);
+    proc_schedule(); //in case proc_kill doesnt trigger the scheduler
 }
 
 pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
 {
     proc_block(current_process);
-    kputs("wow");
     struct proc* p = proc_active_list;
     while(p) {
         if (p->pid == pid) {

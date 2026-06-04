@@ -98,6 +98,22 @@ inline struct file* proc_fd_get(struct proc* p, int fd)
     return &vfs_file_table[p->local_fd_table[fd]];
 }
 
+inline int proc_fd_add(struct proc* p, struct file* f)
+{
+    int fd = proc_fd_alloc(p);
+    if (fd < 0) return fd;
+    p->local_fd_table[fd] = f - vfs_file_table;
+    return fd;
+}
+
+inline int proc_fd_set(struct proc* p, int fd, struct file* f)
+{
+    int idx = f - vfs_file_table;
+    p->local_fd_table[fd] = idx;
+    return idx;
+}
+
+
 inline struct proc* proc_get_process(pid_t pid)
 {
     mutex_lock(&proc_acces_lock);
@@ -114,6 +130,8 @@ inline struct proc* proc_get_process(pid_t pid)
     return NULL;
 }
 
+
+
 inline void proc_free_process(struct proc* p)
 {
     mutex_lock(&proc_acces_lock);
@@ -124,13 +142,22 @@ inline void proc_free_process(struct proc* p)
     }
 
     struct proc* current = proc_active_list;
-    while(current) {
+    if (current == p) {
+        proc_active_list = p->next;
+        p->next = proc_free_list;
+        proc_free_list = p;
+        mutex_unlock(&proc_acces_lock);
+        return;
+    }
+
+    while(current->next) {
         if (current->next == p) {
             current->next = p->next;
             p->next = proc_free_list;
             proc_free_list = p;
             break;
         }
+        current = current->next;
     }
 
     mutex_unlock(&proc_acces_lock);
@@ -154,14 +181,6 @@ inline struct proc* proc_alloc_process()
 
     mutex_unlock(&proc_acces_lock);
     return p;
-}
-
-inline int proc_fd_add(struct proc* p, struct file* f)
-{
-    int fd = proc_fd_alloc(p);
-    if (fd < 0) return fd;
-    p->local_fd_table[fd] = f - vfs_file_table;
-    return fd;
 }
 
 void proc_init()
@@ -207,17 +226,15 @@ int proc_kill(pid_t pid, int sig)
 {
     struct proc* p = proc_get_process(pid);
     if (!p) return -ESRCH;
-    mutex_lock(&p->lock);
-
+    proc_stop_scheduling();
+    kdbg("sending sig %d\n", sig);
     int action = 0;
     if (p->sigmask & (1 << sig)) {
-
+        p->exit_code = sig;
         switch(sig) {
             case SIGCHLD: //sigchld wakes up the parent of a child process
             case SIGCONT:
                 if (p->state == PROC_BLOCKED) {
-                    __asm volatile("bkpt");
-                    kprintf("unblock: %d, %d\n", pid, sig);
                     action = 1;
                 }
                 break;
@@ -236,9 +253,7 @@ int proc_kill(pid_t pid, int sig)
         }
 
     }
-
-    disable_interrupts();
-    mutex_unlock(&p->lock);
+    
     proc_free_process(p);
     if (action == 1) {
         proc_unblock_process(p);
@@ -246,6 +261,9 @@ int proc_kill(pid_t pid, int sig)
         proc_block(p);
     } else if (action == 3) {
         proc_mark_zombie(p, 128 + sig);
+        proc_restart_scheduling();
+    } else {
+        proc_restart_scheduling();
     }
     return 0;
 }

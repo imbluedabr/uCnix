@@ -30,5 +30,7 @@
 
     .align 2
 _start:
-    b main
+    bl main
+    svc #41
+    b .
 

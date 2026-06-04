@@ -33,7 +33,34 @@ void kernel_worker_process()
             last = get_kernel_ticks();
             system_blink();
         }
+        if (current_process->exit_code != 0) {
+            kdbg("kernel_worker: recieved sig %d\n", current_process->exit_code);
+            if (current_process->exit_code == SIGCHLD) {
+                mutex_lock(&proc_acces_lock);
+                
+                int i = 0;
+                struct proc* p = proc_active_list;
+                while(p) {
+                    if (p->ppid == 0 && p->state == PROC_ZOMBIE) {
+                        proc_reap(p);
+                    }
+                    if (p->state != PROC_ZOMBIE) i++;
+                    p = p->next;
+                }
+                mutex_unlock(&proc_acces_lock);
+
+                if (i == 1) goto stop;
+            }
+            current_process->exit_code = 0;
+        }
         device_global_update();
+    }
+
+stop:
+    kinfo("halting kernel...\n");
+    proc_stop_scheduling();
+    while (1) {
+        __WFI();
     }
 }
 
@@ -58,40 +85,46 @@ void kernel_init_process()
     struct filesystem* devfs = mount_table[1].root->fs;
     devfs->fops->mknod(devfs, "tty0", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 0));
 
-    int fd = vfs_open("/dev/tty0", O_RDWR);
-    
-    struct memstat buff;
-    heap_stat(&kernel_allocator, &buff);
-    kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
-    
-
+    int tty0 = vfs_open("/dev/tty0", O_RDWR);
+    int stdout = vfs_fcntl(tty0, F_DUPFD, 0);
+    int stderr = vfs_fcntl(tty0, F_DUPFD, 0);
     kinfo("init: starting userspace init\n");
     fd_set fd_list;
     FD_ZERO(fd_list);
-    FD_SET(fd, fd_list);
+    FD_SET(tty0, fd_list);
+    FD_SET(stdout, fd_list);
+    FD_SET(stderr, fd_list);
     status = sys_spawn("/bin/test.bin", fd_list);
-
-    sys_waitpid(2, &status, 0);
-
-    kdbg("status=%d\n", status);
     
+    //reparent userspace init
+    int irq = disable_interrupts();
+    struct proc* p = proc_get_process(2);
+    if (!p) goto abort;
+    p->pid = 1;
+    p->ppid = 0;
+    current_process->pid = 2;
+    current_process->ppid = 0;
+    enable_interrupts(irq);
+    proc_free_process(p);
     
-    kinfo("proc: PID:PPID:STAT\n");
-    struct proc* p = proc_active_list;
+    sys_waitpid(1, &status, 0);
+
+    /*
+    struct memstat buff;
+    heap_stat(&kernel_allocator, &buff);
+    kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
+ 
+    
+    kinfo("proc: PID:PPID:STAT:REF\n");
+    p = proc_active_list;
     while(p) {
-        kinfo("%d\t%d\t%d\n", (int) p->pid, (int) p->ppid, (int) p->state);
+        kprintf("%d\t%d\t%d\t%d\n", (int) p->pid, (int) p->ppid, (int) p->state, (int) p->refcount);
         p = p->next;
     }
+    */
     
-
 abort:
-    //kinfo("halting kernel...\n");
-    proc_stop_scheduling();
-    enable_interrupts(0); //hack
-    kinfo("kernel halted!");
-    while (1) {
-        __WFI();
-    };
+    sys_exit(0);
 }
 
 void kernel_pre_init()
@@ -139,11 +172,11 @@ const process_desc_t kernel_init_proc = {
     devtbl_init();
 
     kinfo("init: starting kernel worker\n");
-    proc_create(&kernel_worker_proc);
-    
+    struct proc* p = proc_create(&kernel_worker_proc);
+    p->sigmask = 1 << SIGCHLD;
     kinfo("init: starting kernel init\n");
-    struct proc* p = proc_create(&kernel_init_proc);
-    p->sigmask = 1 << SIGCHLD; //enable sigcont signal
+    p = proc_create(&kernel_init_proc);
+    p->sigmask = 1 << SIGCHLD; //enable sigchld signal
 
     proc_start_scheduling();
     while(1);

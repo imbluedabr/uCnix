@@ -72,5 +72,6 @@ usagefault_handler:
     .globl   debugevent_handler
     .type    debugevent_handler, %function
 debugevent_handler:
+    bkpt
     bx lr
 

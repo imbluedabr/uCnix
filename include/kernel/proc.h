@@ -94,6 +94,7 @@ struct proc* proc_get_process(pid_t pid);
 void proc_free_process(struct proc* p);
 struct proc* proc_alloc_process();
 int proc_fd_add(struct proc* p, struct file* f);
+int proc_fd_set(struct proc* p, int fd, struct file* f);
 
 int proc_kill(pid_t pid, int sig); //send a signal to a process
 int proc_reap(struct proc* p);
@@ -103,8 +104,10 @@ struct proc* proc_create(process_desc_t* descriptor);
 void proc_mark_zombie(struct proc* p, int exit_code);
 void proc_unblock_process(struct proc* p); //unblock a process
 void proc_block(struct proc* p); //block a process
+void proc_schedule(); //trigger the scheduler
 //starts the scheduler and never returns
 void proc_start_scheduling();
 //stops the scheduler
 struct proc* proc_stop_scheduling();
+void proc_restart_scheduling();
 

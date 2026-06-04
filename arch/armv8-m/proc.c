@@ -100,10 +100,11 @@ void proc_unblock_process(struct proc* p)
 {
     __disable_irq();
     p->state = PROC_READY;
+    proc_sched_started = true;
     proc_enqueue(p);
     SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
     __DSB();
-    __enable_irq();
+    proc_restart_scheduling();
     __WFI();
 }
 
@@ -113,13 +114,24 @@ void proc_block(struct proc* p)
     p->state = PROC_BLOCKED;
     SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
     __DSB();
-    __enable_irq();
+    proc_restart_scheduling();
     __WFI();
     //wait until pendsv fires
 }
 
+void proc_schedule()
+{
+    __disable_irq();
+    SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+    __DSB();
+    proc_restart_scheduling();
+    __WFI();
+}
+
 void proc_sched_new_task()
 {
+    if (!proc_sched_started) return;
+
     if (current_process->state == PROC_READY) {
         proc_enqueue(current_process);
     }
@@ -149,14 +161,17 @@ void proc_sched_new_task()
 struct proc* proc_stop_scheduling()
 {
     __disable_irq();
-
-    //disable the systick timer
+    proc_sched_started = false;
     SysTick->CTRL &= ~(SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk);
-
-    struct proc* last_process = current_process;
-    current_process = NULL;
-    proc_sched_started = false;    
-    return last_process;
+    __enable_irq();
+    return current_process;
 }
 
+void proc_restart_scheduling()
+{
+    __disable_irq();
+    proc_sched_started = true;
+    SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk;
+    __enable_irq();
+}
 

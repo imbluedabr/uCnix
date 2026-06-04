@@ -2,6 +2,7 @@
 #include <kernel/interrupt.h>
 #include <kernel/proc.h>
 #include <kernel/exec.h>
+#include <kernel/sysctl.h>
 #include <fs/vfs.h>
 
 #include <board/board.h>
@@ -91,11 +92,6 @@ static void s_readdir(struct exception_frame* f)
     f->caller_regs[0] = vfs_readdir(f->caller_regs[0], (struct dirent*) f->caller_regs[1], f->caller_regs[2]);
 }
 
-static void s_rename(struct exception_frame* f)
-{
-
-}
-
 static void s_link(struct exception_frame* f)
 {
 
@@ -155,6 +151,11 @@ static void s_waitpid(struct exception_frame* f)
     f->caller_regs[0] = sys_waitpid(f->caller_regs[0], (int*) f->caller_regs[1], f->caller_regs[2]);
 }
 
+static void s_sysctl(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_sysctl(f->caller_regs[0], (void*) f->caller_regs[1], f->caller_regs[2]);
+}
+
 static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_READ] = s_read,
     [SYS_WRITE] = s_write,
@@ -170,7 +171,6 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_MKDIR] = s_mkdir,
     [SYS_RMDIR] = s_rmdir,
     [SYS_READDIR] = s_readdir,
-    [SYS_RENAME] = s_rename,
     [SYS_LINK] = s_link,
     [SYS_UNLINK] = s_unlink,
     [SYS_MKNOD] = s_mknod,
@@ -183,7 +183,9 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_UMOUNT] = s_umount,
 
     [SYS_EXIT] = s_exit,
-    [SYS_WAITPID] = s_waitpid
+    [SYS_WAITPID] = s_waitpid,
+
+    [SYS_SYSCTL] = s_sysctl,
 };
 
 /*  Syscalls:

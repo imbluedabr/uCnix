@@ -9,7 +9,7 @@ volatile uint32_t time_ticks;
 void systick_handler()
 {
     time_ticks++;
-    if (current_process != NULL) {
+    if (proc_sched_started) {
         SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
         __DSB();
     }

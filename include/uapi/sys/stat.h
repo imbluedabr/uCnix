@@ -42,3 +42,9 @@ struct stat {
     time_t st_ctime;
 };
 
+int stat(const char* pathname, struct stat* statbuf);
+int fstat(int fd, struct stat* statbuf);
+int mkdir(const char* pathname, mode_t mode);
+int mknod(const char* pathname, mode_t mode, dev_t dev);
+mode_t umask(mode_t mask);
+
