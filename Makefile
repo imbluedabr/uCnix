@@ -99,12 +99,9 @@ LNKP ?=
 
 MN_FILE ?= kernel.elf
 
-# IF debugging stack faliures:
-# make CONFIG_DEBUG=y
-
-CFLAGS = $(ARCH_CFLAGS) -ffreestanding -Wall -Wextra -Wno-unused-parameter  $(INCL)
+CFLAGS = $(ARCH_CFLAGS) -fstack-usage -ffreestanding -Wall -Wextra -Wno-unused-parameter  $(INCL)
 ASFLAGS = $(CFLAGS)
-LDFLAGS = $(ARCH_LDFLAGS) -nostartfiles -static -Wl,-Map=kernel.map
+LDFLAGS = $(ARCH_LDFLAGS) -fstack-usage -nostartfiles -static -Wl,-Map=kernel.map
 
 
 ifeq ($(CONFIG_DEBUG), y)

@@ -219,6 +219,7 @@ int proc_reap(struct proc* p)
     }
     proc_pid_free(p->pid);
     proc_free_process(p);
+
     return p->exit_code;
 }
 
@@ -227,7 +228,7 @@ int proc_kill(pid_t pid, int sig)
     struct proc* p = proc_get_process(pid);
     if (!p) return -ESRCH;
     proc_stop_scheduling();
-    kdbg("sending sig %d\n", sig);
+    //kdbg("sending sig %d\n", sig);
     int action = 0;
     if (p->sigmask & (1 << sig)) {
         p->exit_code = sig;

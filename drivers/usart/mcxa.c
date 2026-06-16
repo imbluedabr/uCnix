@@ -4,6 +4,64 @@
 #include <drivers/usart.h>
 
 
+static void* lpuart0_init()
+{
+    MRCC0->MRCC_LPUART0_CLKSEL = MRCC_MRCC_LPUART0_CLKSEL_MUX(2);
+    MRCC0->MRCC_LPUART0_CLKDIV = 0;
+
+    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_LPUART0(1);
+    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_PORT0(1);
+    
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_LPUART0(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_PORT0(1);
+
+    PORT0->PCR[2] = PORT_PCR_LK(1) | PORT_PCR_MUX(2) | PORT_PCR_IBE(1);
+    PORT0->PCR[3] = PORT_PCR_LK(1) | PORT_PCR_MUX(2);
+    
+    return LPUART0;
+}
+
+static void* lpuart1_init()
+{
+    MRCC0->MRCC_LPUART1_CLKSEL = MRCC_MRCC_LPUART1_CLKSEL_MUX(2);
+    MRCC0->MRCC_LPUART1_CLKDIV = 0;
+
+    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_LPUART1(1);
+    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_PORT2(1);
+    
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_LPUART1(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_PORT2(1);
+
+    PORT2->PCR[12] = PORT_PCR_LK(1) | PORT_PCR_MUX(3) | PORT_PCR_IBE(1);
+    PORT2->PCR[13] = PORT_PCR_LK(1) | PORT_PCR_MUX(3);
+
+    return LPUART1;
+}
+
+static void* lpuart2_init()
+{
+    MRCC0->MRCC_LPUART2_CLKSEL = MRCC_MRCC_LPUART2_CLKSEL_MUX(2);
+    MRCC0->MRCC_LPUART2_CLKDIV = 0;
+
+    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_LPUART2(1);
+    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_PORT1(1);
+    
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_LPUART2(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_PORT1(1);
+
+    PORT1->PCR[4] = PORT_PCR_LK(1) | PORT_PCR_MUX(2) | PORT_PCR_IBE(1);
+    PORT1->PCR[5] = PORT_PCR_LK(1) | PORT_PCR_MUX(2);
+
+    return LPUART2;
+}
+
+typedef void* (*lpuart_init_t)();
+const lpuart_init_t initializers[] = {
+    lpuart0_init,
+    lpuart1_init,
+    lpuart2_init
+};
+
 void usart_mcxa_interrupt()
 {
     struct usart_device* usart = get_current_handler_struct();
@@ -17,6 +75,7 @@ void usart_mcxa_interrupt()
     } else {
         lpuart->CTRL &= ~LPUART_CTRL_TIE_MASK;
     }
+    
     char c = lpuart->DATA;
     uint8_t tmp = (usart->rx_head + 1) & USART_RX_FIFO_MSK;
     if (usart->rx_tail != usart->rx_head) {
@@ -29,19 +88,9 @@ void usart_mcxa_interrupt()
 
 void usart_mcxa_init(struct usart_device* usart, struct usart_desc* desc)
 {
-    volatile LPUART_Type* lpuart = desc->base;
-    MRCC0->MRCC_LPUART0_CLKSEL = MRCC_MRCC_LPUART0_CLKSEL_MUX(2);
-    MRCC0->MRCC_LPUART0_CLKDIV = 0;
+    volatile LPUART_Type* lpuart = initializers[desc->uart_num]();
+    usart->usart_base = (void*) lpuart;
 
-    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_LPUART0(1);
-    MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_PORT0(1);
-    
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_LPUART0(1);
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_PORT0(1);
-
-    PORT0->PCR[2] = PORT_PCR_LK(1) | PORT_PCR_MUX(2) | PORT_PCR_IBE(1);
-    PORT0->PCR[3] = PORT_PCR_LK(1) | PORT_PCR_MUX(2);
-    
     register_interrupt(desc->irq, usart, usart_mcxa_interrupt);
     NVIC_SetPriority(desc->irq, 3);
     NVIC_ClearPendingIRQ(desc->irq);
@@ -77,7 +126,7 @@ int usart_mcxa_writeb(struct usart_device* usart, uint8_t val)
     usart->tx_fifo[tmp] = val;
     volatile LPUART_Type* lpuart = usart->usart_base;
     lpuart->CTRL |= LPUART_CTRL_TIE_MASK;
-    __disable_irq();
+    __enable_irq();
     return 0;
 }
 

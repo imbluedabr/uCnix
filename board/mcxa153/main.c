@@ -28,15 +28,25 @@ const device_node_t static_device_table[] = {
         .major = USART_MAJOR,
         .preinit = 1,
         .desc = &(struct usart_desc) {
-            .base = LPUART0,
+            .uart_num = 0,
             .baud = 10,
             .irq = LPUART0_IRQn,
             .type = MCXA_LPUART
         }
     },
     {
+        .major = USART_MAJOR,
+        .preinit = 0,
+        .desc = &(struct usart_desc) {
+            .uart_num = 1,
+            .baud = 10,
+            .irq = LPUART1_IRQn,
+            .type = MCXA_LPUART
+        }
+    },
+    {
         .major = HD44XXX_MAJOR,
-        .preinit = 1,
+        .preinit = 0,
         .desc = &(struct hd44xxx_desc) {
             .port = NULL,
             .type = HD_ST_9720
@@ -53,7 +63,7 @@ const device_node_t static_device_table[] = {
     }
 
 };
-const int static_device_table_size = 3;
+const int static_device_table_size = 4;
 
 [[gnu::aligned(8)]] uint8_t __heap_start[2048];
 
@@ -64,7 +74,6 @@ void main()
 
     dev_t usart0_devno;
     device_create(&usart0_devno, USART_MAJOR, static_device_table[0].desc);
-    device_create(&usart0_devno, HD44XXX_MAJOR, static_device_table[1].desc);
    
     kernel_init();
 }

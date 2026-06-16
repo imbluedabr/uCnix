@@ -130,7 +130,7 @@ void proc_schedule()
 
 void proc_sched_new_task()
 {
-    if (!proc_sched_started) return;
+    if (proc_sched_started == 0) return;
 
     if (current_process->state == PROC_READY) {
         proc_enqueue(current_process);
@@ -161,8 +161,9 @@ void proc_sched_new_task()
 struct proc* proc_stop_scheduling()
 {
     __disable_irq();
-    proc_sched_started = false;
+    proc_sched_started = 0;
     SysTick->CTRL &= ~(SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk);
+    __DSB();
     __enable_irq();
     return current_process;
 }
@@ -170,8 +171,9 @@ struct proc* proc_stop_scheduling()
 void proc_restart_scheduling()
 {
     __disable_irq();
-    proc_sched_started = true;
+    proc_sched_started = 1;
     SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk;
+    __DSB();
     __enable_irq();
 }
 

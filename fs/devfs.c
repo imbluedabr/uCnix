@@ -19,7 +19,7 @@ const struct file_ops devfs_file_ops = {
 ssize_t devfs_read(struct file* f, char* buff, int count)
 {
     struct inode* i = f->i;
-    if (i->perm.mode & S_IFDEV) {
+    if (i->devfs.dev && i->perm.mode & S_IFDEV) {
         return device_read(i->devfs.dev, buff, count, f->offset);
     }
     return -EIO;
@@ -28,7 +28,7 @@ ssize_t devfs_read(struct file* f, char* buff, int count)
 ssize_t devfs_write(struct file* f, const char* buff, int count)
 {
     struct inode* i = f->i;
-    if (i->perm.mode & S_IFDEV) {
+    if (i->devfs.dev && i->perm.mode & S_IFDEV) {
         return device_write(i->devfs.dev, (void*) buff, count, f->offset);
     }
     return -EIO;
@@ -39,13 +39,18 @@ int devfs_readdir(struct file* f, struct dirent* buff, int count)
     struct devfs_filesystem* devfs = (struct devfs_filesystem*) f->i->fs;
 
     int d_count = 0;
-    for (int i = f->offset; i < 16; i++) {
-        struct devfs_file* f = &devfs->files[i];
-        if (f->devno != 255) {
+    for (int i = 0; i < 16; i++) {
+        struct devfs_file* d = &devfs->files[i];
+        if (d->devno != 255) {
+            if (d_count < f->offset) {
+                d_count++;
+                continue;
+            }
+            
             buff[d_count].d_ino = FS_MAKE_UNO(devfs->base.fsid, i);
-            buff[d_count].d_namelen = strnlen(f->name, FS_INAME_LEN);
+            buff[d_count].d_namelen = strnlen(d->name, FS_INAME_LEN);
             buff[d_count].d_offset = i;
-            strlcpy(buff[d_count].d_name, f->name, FS_INAME_LEN);
+            strlcpy(buff[d_count].d_name, d->name, FS_INAME_LEN);
             d_count++;
         }
         if (d_count >= count) break;

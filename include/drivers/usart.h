@@ -8,7 +8,7 @@ typedef enum : uint8_t {
 extern const int usart_baud_rates[11];
 
 struct usart_desc {
-    void* base;
+    uint8_t uart_num; //number of the uart
     uint8_t baud;
     uint8_t irq;
     usart_type_e type;

@@ -16,7 +16,7 @@ void mutex_init(mutex_t* mut)
 //TODO: count and lock can be just one variable since lock will be 0 if count reaches 0, having 2 seperate variables is useless
 void mutex_lock(mutex_t* mut)
 {
-    if (!proc_sched_started) return;
+    if (proc_sched_started == 0) return;
     int irq = disable_interrupts();
 
     if (mut->lock && current_process->pid == mut->owner) {
@@ -44,7 +44,7 @@ void mutex_lock(mutex_t* mut)
 
 void mutex_unlock(mutex_t* mut)
 {
-    if (!proc_sched_started) return;
+    if (proc_sched_started == 0) return;
     int irq = disable_interrupts();
     
     if (mut->owner != current_process->pid) {

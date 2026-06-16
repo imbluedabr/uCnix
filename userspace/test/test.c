@@ -3,8 +3,7 @@
 
 int main()
 {
-    puts("Hello world!\n");
-    
+    puts("Hello from /bin/test.bin!\nThis is being written to stdout!");
     return 0;
 }
 

@@ -59,7 +59,6 @@ struct device* usart_create(void* desc)
     usart->base.driver = &usart_driver;
     struct usart_desc* d = desc;
     usart->base.impl = d->type;
-    usart->usart_base = d->base;
     impl_table[d->type].init(usart, d);
 
     return &usart->base;

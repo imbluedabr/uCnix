@@ -12,7 +12,7 @@
 #include <uapi/signal.h>
 #include <stdint.h>
 
-int sys_spawn(const char* path, fd_set fd_list)
+__attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set fd_list)
 {
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0) return fd;
@@ -93,7 +93,7 @@ fmt_error:
     return -ENOEXEC;
 }
 
-int sys_getpid()
+pid_t sys_getpid()
 {
     return current_process->pid;
 }

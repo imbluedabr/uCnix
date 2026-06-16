@@ -69,7 +69,7 @@ static void s_select(struct exception_frame* f)
 
 static void s_fcntl(struct exception_frame* f)
 {
-
+    f->caller_regs[0] = vfs_fcntl(f->caller_regs[0], f->caller_regs[1], f->caller_regs[2]);
 }
 
 static void s_chdir(struct exception_frame* f)
@@ -109,7 +109,7 @@ static void s_mknod(struct exception_frame* f)
 
 static void s_fstatfs(struct exception_frame* f)
 {
-
+    f->caller_regs[0] = vfs_fstatfs(f->caller_regs[0], (struct statfs*) f->caller_regs[1]);
 }
 
 static void s_fchmod(struct exception_frame* f)
@@ -140,6 +140,10 @@ static void s_mount(struct exception_frame* f)
 static void s_umount(struct exception_frame* f)
 {
 
+}
+
+static void s_getpid(struct exception_frame* f) {
+    f->caller_regs[0] = sys_getpid();
 }
 
 static void s_exit(struct exception_frame* f) {
@@ -182,6 +186,7 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_MOUNT] = s_mount,
     [SYS_UMOUNT] = s_umount,
 
+    [SYS_GETPID] = s_getpid,
     [SYS_EXIT] = s_exit,
     [SYS_WAITPID] = s_waitpid,
 
