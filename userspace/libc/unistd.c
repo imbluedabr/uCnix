@@ -1,18 +1,6 @@
-#include <sys/types.h>
-#include <sys/fcntl.h>
-#include <sys/stat.h>
-#include <sys/utsname.h>
-#include <sys/select.h>
-#include <sys/wait.h>
-#include <sys/dir.h>
 #include <unistd.h>
-#include <signal.h>
-#include <syscalls.h>
-#include <stddef.h>
-
-#define SVCALL(SVCNO) __asm volatile( \
-            "svc #" #SVCNO "\nbx lr" \
-            )
+#include <sys/fcntl.h>
+#include "svcall.h"
 
 [[gnu::naked]] ssize_t read(int fd, void* buf, size_t count) {
     SVCALL(0);
@@ -22,30 +10,16 @@
     SVCALL(1);
 }
 
-[[gnu::naked]] int open(const char* pathname, int flags) {
-    SVCALL(2);
-}
-
 [[gnu::naked]] int close(int fd) {
     SVCALL(3);
-}
-
-int stat(const char* pathname, struct stat* statbuf) {
-    int fd = open(pathname, O_RDONLY);
-    return fstat(fd, statbuf);
 }
 
 [[gnu::naked]] off_t lseek(int fd, off_t offset, int whence) {
     SVCALL(5);
 }
 
-
 [[gnu::naked]] int access(const char* pathname, int mode) {
     SVCALL(7);
-}
-
-[[gnu::naked]] int fcntl(int fd, int op, void* arg) {
-    SVCALL(9);
 }
 
 [[gnu::naked]] int chdir(const char* path) {
@@ -54,10 +28,6 @@ int stat(const char* pathname, struct stat* statbuf) {
 
 [[gnu::naked]] int rmdir(const char* pathname) {
     SVCALL(12);
-}
-
-[[gnu::naked]] int readdir(int fd, struct dirent* buf, int count) {
-    SVCALL(13);
 }
 
 [[gnu::naked]] int link(const char* oldpath, const char* newpath) {
@@ -102,32 +72,9 @@ pid_t getppid() {
     return getpdid(1);
 }
 
-[[gnu::naked]] pid_t spawn(const char* path, fd_set* fds, const char** argv) {
-    SVCALL(40);
-}
-
 [[gnu::naked]] void _exit(int status) {
     SVCALL(41);
 }
-
-[[gnu::naked]] pid_t waitpid(pid_t pid, int* wstatus, int options) {
-    SVCALL(42);
-}
-
-pid_t wait(int* wstatus) {
-    return waitpid(-1, wstatus, 0);
-}
-
-
-[[gnu::naked]] int kill(pid_t pid, int sig) {
-    SVCALL(43);
-}
-
-[[gnu::naked]] int sigprocmask(int how, const sigset_t* set, sigset_t* oldset)
-{
-    SVCALL(44);
-}
-
 
 [[gnu::naked]] int setpgid(pid_t pid, pid_t pgid) {
     SVCALL(48);
@@ -137,7 +84,4 @@ pid_t wait(int* wstatus) {
     SVCALL(49);
 }
 
-[[gnu::naked]] int uname(struct utsname* buff) {
-    SVCALL(63);
-}
 

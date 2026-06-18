@@ -30,7 +30,7 @@
 
     .align 2
 _start:
-    
+    bkpt
     /* sp should point to the start of the argv array, so it should be passed via r0 */
     movs r0, #0
     mov r1, sp

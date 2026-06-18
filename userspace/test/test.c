@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+
 void builtin_ls(int argc, char** argv) {
     if (argc != 2) {
         puts("ls: invalid argument(s)\n");
@@ -58,7 +59,6 @@ void execute_command(char* buffer)
     }
 }
 
-
 int main(int argc, char** argv)
 {
     puts("Hello from /bin/test.bin!\n");
@@ -78,7 +78,8 @@ int main(int argc, char** argv)
         puts("# ");
         memset(cmd_buff, 0, 32);
         read(STDIN_FILENO, cmd_buff, 32);
-        execute_command(cmd_buff);
+        //execute_command(cmd_buff);
+        printf("cmd: %s\n", cmd_buff);
     }
 
     return 0;

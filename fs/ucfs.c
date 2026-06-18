@@ -54,7 +54,7 @@ ssize_t ucfs_read(struct file* f, char* buff, int count)
     
     
     for (int i = 0; i < (count >> 9); i++) {
-        device_read(fs->dev, buff, 1, fs->data_block_offset + fs->indirect_buffer[current_block++]);
+        device_read(fs->dev, buff + bytes_read, 1, fs->data_block_offset + fs->indirect_buffer[current_block++]);
         bytes_read += 512;
         if (fs->indirect_buffer[current_block] == BLOCK_NIL) {
             return bytes_read;
