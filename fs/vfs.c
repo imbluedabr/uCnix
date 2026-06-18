@@ -68,6 +68,20 @@ void inode_free(struct inode* i)
     mutex_unlock(&vfs_cache_lock);
 }
 
+void inode_stat()
+{
+    mutex_lock(&vfs_cache_lock);
+    
+    kdbg("vfs: cache_list_size=%d\n", cache_list_size);
+    struct inode* curr = cache_list;
+    while (curr) {
+        kdbg("ino=%d, fsid=%d, perm=%o\n", FS_GET_INO(curr->ino), FS_GET_FSID(curr->ino), (uint32_t) curr->perm.mode);
+        curr = curr->next;
+    }
+    
+    mutex_unlock(&vfs_cache_lock);
+}
+
 #define DENTRY_CACHE_LEN 16
 struct dentry dentry_cache[DENTRY_CACHE_LEN];
 uint8_t dentry_cache_index;

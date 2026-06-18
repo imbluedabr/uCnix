@@ -24,5 +24,10 @@
 #define SIGTTOU 22
 #define SIGIO 23
 
+#define SIG_BLOCK 0
+#define SIG_UNBLOCK 1
+#define SIG_SETMASK 2
+
 int kill(pid_t pid, int sig);
+int sigprocmask(int how, const sigset_t* set, sigset_t* oldset);
 

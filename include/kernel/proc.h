@@ -31,14 +31,17 @@ struct proc {
     CONTROL_Type save_control;
     uint8_t* save_splim;
 #endif
-    
+    uint8_t kernel_mode; //0 = user mode, 1 = kernel mode
+    uint8_t crit_section;
+    uint8_t refcount;
+
     uint8_t* program_base;
     int program_size;
 
     process_state_e state;
-    pid_t pid;
-    pid_t ppid;
-    pid_t pgrp;
+    uint8_t pid;
+    uint8_t ppid;
+    uint8_t pgrp;
     uint32_t sigmask;
     int exit_code;
 
@@ -47,11 +50,6 @@ struct proc {
 
     //current working directory of the process
     struct inode* cwd;
-    
-    //lock for accessing the process data
-    mutex_t lock;
-    uint8_t crit_section;
-    uint8_t refcount;
     
     waiter_t* waiting_on;
     struct proc* wait_next; //next item in the wait queue
@@ -63,6 +61,7 @@ typedef struct {
     uint8_t* user_stack;
     size_t size;
     void (*entry_point)();
+    const char** argv;
     uint8_t stopped : 1;
     uint8_t kernel_mode : 1;
 } process_desc_t;
@@ -77,7 +76,7 @@ extern bool proc_sched_started;
 void proc_init();
 
 stack_t* proc_stack_alloc();
-void stack_free(stack_t* stack);
+void proc_stack_free(stack_t* stack);
 
 pid_t proc_pid_alloc();
 void proc_pid_free(pid_t pid);

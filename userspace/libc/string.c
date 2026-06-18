@@ -21,6 +21,15 @@ uint32_t strnlen(const char* str, uint32_t max_size)
     return size;
 }
 
+int strcmp( const char * s1, const char * s2)
+{
+    while (*s1 && ( *s1 == *s2 ) )
+    {
+        ++s1;
+        ++s2;
+    }
+    return ( *(unsigned char *)s1 - *(unsigned char *)s2 );
+}
 
 int strncmp( const char * s1, const char * s2, uint32_t n )
 {

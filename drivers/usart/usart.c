@@ -1,5 +1,6 @@
 #include <drivers/usart.h>
 #include <lib/kmalloc.h>
+#include <lib/kprint.h>
 #include <kernel/settings.h>
 #include <kernel/majors.h>
 #include <kernel/proc.h>
@@ -89,34 +90,11 @@ int usart_writeb(struct device* dev, char val)
 
 void usart_update(struct device* dev)
 {
-    struct usart_device* usart = (struct usart_device*) dev;
     struct io_request* req = device_peek_request(dev);
     if (!req) {
         return;
     }
-    uint32_t bytes_transfered = usart->bytes_transfered;
-    if (req->op) {
-        if (usart_writeb(dev, ((char*)req->buffer)[bytes_transfered]) < 0) {
-            return;
-        };
-    } else {
-        int tmp  = usart_readb(dev);
-        if (tmp < 0) {
-            return;
-        }
-        ((char*)req->buffer)[bytes_transfered] = tmp;
-    }
-
-    bytes_transfered++;
-    if (bytes_transfered >= req->count) {
-        req->count = bytes_transfered;
-        req->status = 1;
-        proc_unblock_process(waiter_pop(&req->waiter));
-        device_dequeue_request(dev);
-        usart->bytes_transfered = 0;
-    } else {
-        usart->bytes_transfered = bytes_transfered;
-    }
+    kerr("usart: devreq is not suported by usart driver!\n");
 }
 
 

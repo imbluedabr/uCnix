@@ -6,6 +6,7 @@ uint32_t strlen(const char* str);
 
 uint32_t strnlen(const char* str, uint32_t max_size);
 
+int strcmp(const char* s1, const char* s2);
 int strncmp(const char * s1, const char * s2, uint32_t n);
 
 int strncpy(char* dest, char* src, uint32_t size);

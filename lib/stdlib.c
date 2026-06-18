@@ -1,7 +1,7 @@
 #include <lib/stdlib.h>
 #include <stdbool.h>
 
-uint32_t strlen(const char* str)
+[[gnu::used]] uint32_t strlen(const char* str)
 {
     int size = 0;
     while (*str++ != '\0') {

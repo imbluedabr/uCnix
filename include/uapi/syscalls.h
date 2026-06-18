@@ -51,12 +51,12 @@ typedef enum {
 
     // process api
     SYS_SBRK = 38,
-    SYS_GETPID = 39,
+    SYS_GETPDID = 39,
     SYS_SPAWN = 40,
     SYS_EXIT = 41,
     SYS_WAITPID = 42,
     SYS_KILL = 43,
-    SYS_SIGSETMASK = 44,
+    SYS_SIGPROCMASK = 44,
     SYS_PTRACE = 45,
     SYS_GETRLIMIT = 46,
     SYS_GETRUSAGE= 47,
@@ -81,7 +81,7 @@ typedef enum {
     // misc api
     SYS_VHANGUP = 61,
     SYS_SYSCTL = 62,
-    SYS_UNAME,
+    SYS_UNAME = 63,
     SYS_REBOOT,
     SYS_PIPE,
 

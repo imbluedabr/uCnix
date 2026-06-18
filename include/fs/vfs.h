@@ -20,6 +20,7 @@ struct file_ops;
 #define FS_MAKE_UNO(ID, NO) ((ID << 24) + NO)
 //retrieve inode number
 #define FS_GET_INO(INO) (INO & 0xFFFFFF)
+#define FS_GET_FSID(INO) (INO >> 24)
 
 #define FS_MAKE_PERM(OWNER, GROUP, MODE) ((struct permissions) { .user = OWNER, .group = GROUP, .mode = MODE})
 #define FS_SET_FTYPE(PERM, TYPE) (PERM.mode = (PERM.mode & (07777)) | TYPE)
@@ -109,6 +110,7 @@ struct file_ops {
 extern mutex_t vfs_cache_lock;
 struct inode* inode_alloc();
 void inode_free(struct inode* i);
+void inode_stat();
 void file_free(struct file* f);
 
 extern struct file vfs_file_table[VFS_MAXFILES];

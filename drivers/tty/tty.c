@@ -79,11 +79,14 @@ static void tty_read(struct tty_device* tty, struct io_request* req)
             write_dev->driver->writeb(write_dev, ' ');
             tty->bytes_copied--;
         }
-        write_dev->driver->writeb(write_dev, c);
 
-        if (c == '\n') {
+        if (c == '\r') {
+            while(tty_writeb(&tty->base, '\n') == -1);
             goto end;
-        } else if (c == '\b') {
+        }
+
+        write_dev->driver->writeb(write_dev, c);
+        if (c == '\b') {
             return;
         }
         

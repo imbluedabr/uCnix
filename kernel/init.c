@@ -60,6 +60,8 @@ stop:
     struct memstat buff;
     heap_stat(&kernel_allocator, &buff);
     kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
+    
+    inode_stat();
 
     kinfo("halting kernel...\n");
     //proc_stop_scheduling();
@@ -68,7 +70,7 @@ stop:
     }
 }
 
-__attribute__((optimize("O2"))) void kernel_init_process()
+void kernel_init_process()
 {
     kinfo("vfs: mounting rootfs on dev (%d,%d) of type (%s) on /\n", MAJOR(ROOTFS_DEVNO), MINOR(ROOTFS_DEVNO), ROOTFS_TYPE);
 
@@ -94,7 +96,7 @@ __attribute__((optimize("O2"))) void kernel_init_process()
     
     
     
-    int stdin = vfs_open("/dev/tty1", O_RDWR);
+    int stdin = vfs_open("/dev/tty0", O_RDWR);
     int stdout = vfs_fcntl(stdin, F_DUPFD, 0);
     int stderr = vfs_fcntl(stdin, F_DUPFD, 0);
     kinfo("init: starting userspace init\n");
@@ -103,8 +105,7 @@ __attribute__((optimize("O2"))) void kernel_init_process()
     FD_SET(stdin, fd_list);
     FD_SET(stdout, fd_list);
     FD_SET(stderr, fd_list);
-    status = sys_spawn("/bin/test.bin", fd_list);
-    
+    status = sys_spawn("/bin/test.bin", &fd_list, NULL);
     
     //reparent userspace init
     int irq = disable_interrupts();
@@ -115,7 +116,8 @@ __attribute__((optimize("O2"))) void kernel_init_process()
     current_process->pid = 2;
     current_process->ppid = 0;
     enable_interrupts(irq);
-    proc_free_process(p);       
+    proc_free_process(p);
+    proc_kill(1, SIGCONT);
     
 abort:
     sys_exit(0);
@@ -125,7 +127,7 @@ void kernel_pre_init()
 {
     system_init(); //initialize cache, flash and other basic board specific stuff
     interrupt_init(); //load the ram vector table
-    kmalloc_init(__heap_start, 2048); //initialize the heap
+    kmalloc_init(__heap_start, __heap_size); //initialize the heap
     page_init();
     time_init();
     device_init();
@@ -141,11 +143,13 @@ void kernel_pre_init()
 
 const process_desc_t kernel_worker_proc = {
     .entry_point = &kernel_worker_process,
+    .argv = NULL,
     .stopped = 0,
     .kernel_mode = 1
 };
 const process_desc_t kernel_init_proc = {
     .entry_point = &kernel_init_process,
+    .argv = NULL,
     .stopped = 0,
     .kernel_mode = 1
 };
@@ -162,7 +166,7 @@ const process_desc_t kernel_init_proc = {
             .writer = INIT_CONSOLE_WDEV
             });
        
-    kprintf("\e[1;35m%s %s %s %s\n\e[1;39m", uname.sysname, uname.release, uname.version, uname.machine);
+    kprintf("\e[1;35m%s %s %s %s %s\n\e[1;39m", local_uname.sysname, local_uname.nodename, local_uname.release, local_uname.version, local_uname.machine);
     
     devtbl_init();
 
@@ -176,7 +180,7 @@ const process_desc_t kernel_init_proc = {
     p->sigmask = 1 << SIGCHLD;
     kinfo("init: starting kernel init\n");
     p = proc_create(&kernel_init_proc);
-    p->sigmask = 1 << SIGCHLD; //enable sigchld signal
+    p->sigmask = (1 << SIGCHLD) | (1 << SIGCONT); //enable sigchld signal
 
     proc_start_scheduling();
     while(1);

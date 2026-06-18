@@ -65,7 +65,8 @@ const device_node_t static_device_table[] = {
 };
 const int static_device_table_size = 4;
 
-[[gnu::aligned(8)]] uint8_t __heap_start[2048];
+[[gnu::aligned(8)]] uint8_t __heap_start[2816];
+const int __heap_size = sizeof(__heap_start);
 
 void main()
 {

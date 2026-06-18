@@ -30,6 +30,21 @@
 
     .align 2
 _start:
+    
+    /* sp should point to the start of the argv array, so it should be passed via r0 */
+    movs r0, #0
+    mov r1, sp
+
+loop:
+    ldr r2, [r1]
+    cmp r2, #0
+    beq start_main
+    add r1, #4
+    add r0, #1
+    b loop
+
+start_main:
+    mov r1, sp
     bl main
     svc #41
     b .

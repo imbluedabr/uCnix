@@ -11,4 +11,5 @@ struct utsname {
     char machine[UTSLEN];    /* Hardware type identifier */
 };
 
+int uname(struct utsname* buff);
 

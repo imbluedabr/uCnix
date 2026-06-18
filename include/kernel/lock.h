@@ -8,7 +8,7 @@ struct proc;
 
 typedef struct {
     waiter_t waiter;
-    pid_t owner;
+    uint8_t owner;
     uint8_t count : 7;
     uint8_t lock : 1;
 } mutex_t;

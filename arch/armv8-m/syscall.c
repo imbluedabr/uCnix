@@ -3,6 +3,7 @@
 #include <kernel/proc.h>
 #include <kernel/exec.h>
 #include <kernel/sysctl.h>
+#include <kernel/uname.h>
 #include <fs/vfs.h>
 
 #include <board/board.h>
@@ -142,8 +143,12 @@ static void s_umount(struct exception_frame* f)
 
 }
 
-static void s_getpid(struct exception_frame* f) {
-    f->caller_regs[0] = sys_getpid();
+static void s_getpdid(struct exception_frame* f) {
+    f->caller_regs[0] = sys_getpdid(f->caller_regs[0]);
+}
+
+static void s_spawn(struct exception_frame* f) {
+    f->caller_regs[0] = sys_spawn((const char*) f->caller_regs[0], (fd_set*) f->caller_regs[1], (const char**) f->caller_regs[2]);
 }
 
 static void s_exit(struct exception_frame* f) {
@@ -155,9 +160,24 @@ static void s_waitpid(struct exception_frame* f)
     f->caller_regs[0] = sys_waitpid(f->caller_regs[0], (int*) f->caller_regs[1], f->caller_regs[2]);
 }
 
+static void s_kill(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_kill(f->caller_regs[0], f->caller_regs[1]);
+}
+
+static void s_sigprocmask(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_sigprocmask(f->caller_regs[0], (const sigset_t*) f->caller_regs[1], (sigset_t*) f->caller_regs[2]);
+}
+
 static void s_sysctl(struct exception_frame* f)
 {
     f->caller_regs[0] = sys_sysctl(f->caller_regs[0], (void*) f->caller_regs[1], f->caller_regs[2]);
+}
+
+static void s_uname(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_uname((struct utsname*) f->caller_regs[0]);
 }
 
 static const syscall_t s_table[SYSCALL_COUNT] = {
@@ -186,11 +206,15 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_MOUNT] = s_mount,
     [SYS_UMOUNT] = s_umount,
 
-    [SYS_GETPID] = s_getpid,
+    [SYS_GETPDID] = s_getpdid,
+    [SYS_SPAWN] = s_spawn,
     [SYS_EXIT] = s_exit,
     [SYS_WAITPID] = s_waitpid,
+    [SYS_KILL] = s_kill,
+    [SYS_SIGPROCMASK] = s_sigprocmask,
 
     [SYS_SYSCTL] = s_sysctl,
+    [SYS_UNAME] = s_uname
 };
 
 /*  Syscalls:

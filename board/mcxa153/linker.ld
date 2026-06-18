@@ -43,16 +43,6 @@ SECTIONS
   } > m_flash
   
   __DATA_ROM = .;
-  .data : AT(__DATA_ROM)
-  {
-    . = ALIGN(4);
-    __data_start = .;
-    *(.data)
-    *(.data*)
-    . = ALIGN(4);
-    __data_end = .;
-  } > m_srama0
-  __DATA_ROM_END = .;
 
   .bss :
   {
@@ -62,6 +52,16 @@ SECTIONS
     *(.bss*)
     . = ALIGN(4);
     __bss_end = .;
+  } > m_srama0
+
+  .data : AT(__DATA_ROM)
+  {
+    . = ALIGN(4);
+    __data_start = .;
+    *(.data)
+    *(.data*)
+    . = ALIGN(4);
+    __data_end = .;
   } > m_srama0
   
   .stack :

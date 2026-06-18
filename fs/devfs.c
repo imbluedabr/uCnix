@@ -76,7 +76,7 @@ int devfs_mount(struct mount* mountpoint, dev_t devno, int mountflags)
         devfs->files[i].devno = 255;
     }
     kdbg("devfs: creating root inode\n");
-    mountpoint->root = devfs_read_i(&devfs->base, 255);
+    mountpoint->root = devfs_read_i(&devfs->base, FS_MAKE_UNO(devfs->base.fsid, 255));
     if (mountpoint->root == NULL) {
         kfree(devfs);
         return -EIO;

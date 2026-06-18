@@ -5,6 +5,7 @@
 #include <kernel/panic.h>
 #include <lib/stdlib.h>
 #include <lib/kmalloc.h>
+#include <lib/kprint.h>
 #include <arch/armv8-m/proc.h>
 #include <arch/armv8-m/syscall.h>
 #include <fs/vfs.h>
@@ -23,14 +24,13 @@ void proc_sched_init()
     __enable_irq();
 }
 
-struct proc* proc_create(process_desc_t* descriptor)
+__attribute__((optimize("O2"))) struct proc* proc_create(process_desc_t* descriptor)
 {
     struct proc* p = proc_alloc_process();
-    
-    mutex_lock(&p->lock);
 
     pid_t pid = proc_pid_alloc();
     p->pid = pid;
+    p->kernel_mode = descriptor->kernel_mode;
 
     //user mode thread
     if (!descriptor->kernel_mode) {
@@ -38,6 +38,12 @@ struct proc* proc_create(process_desc_t* descriptor)
         p->splim = descriptor->user_stack; //the limit of the stack is the base of the stack memory
         
         p->control.w = CONTROL_SPSEL_Msk | CONTROL_nPRIV_Msk;
+        
+        uint8_t* kstack = (uint8_t*) proc_stack_alloc();
+        p->save_psp = kstack + PROC_KSTACK_SIZE;
+        p->save_splim = kstack;
+        p->save_control.w = CONTROL_SPSEL_Msk;
+
     } else {
         uint8_t* kstack = (uint8_t*) proc_stack_alloc();
         p->psp = kstack + PROC_KSTACK_SIZE; //the stack grows downwards so we must put the top of the array into psp
@@ -46,15 +52,37 @@ struct proc* proc_create(process_desc_t* descriptor)
         p->control.w = CONTROL_SPSEL_Msk;
     }
     
-    //kernel mode thread
-    if (!descriptor->kernel_mode) {
-        uint8_t* kstack = (uint8_t*) proc_stack_alloc();
-        p->save_psp = kstack + PROC_KSTACK_SIZE;
-        p->save_splim = kstack;
-        p->save_control.w = CONTROL_SPSEL_Msk;
-    }
-
+    
     //setup user mode stack
+    //push argv
+    if (descriptor->argv) {
+        const char** argv = descriptor->argv;
+        char* arg_adr[8];
+        int i = 0;
+        while (argv[i]) {
+            int len = strlen(descriptor->argv[i]) + 1; //count NULL terminator
+            p->psp -= len;
+            arg_adr[i] = (char*) p->psp;
+            memcpy(p->psp, descriptor->argv[i], len);
+            kdbg("proc: arg%d=\"%s\"\n", i, arg_adr[i]);
+            i++;
+        }
+        p->psp = (uint8_t*) ((uint32_t) p->psp & ~0b11); //align down to 4 byte boundary
+        //terminate the arg vector with NULL
+        p->psp -= sizeof(char*);
+        *((char**) p->psp) = NULL;
+
+        for (int k = 0; k < i; k++) {
+            p->psp -= sizeof(char*);
+            *((char**) p->psp) = arg_adr[i - k - 1];
+        }
+
+    } else {
+        //terminate the arg vector with NULL
+        p->psp -= sizeof(char*);
+        *((char**) p->psp) = NULL;
+    }
+    //push preemption frame
     p->psp -= sizeof(struct context_frame);
     struct context_frame* frame = (struct context_frame*) p->psp;
     memset(frame, 0, sizeof(struct context_frame));
@@ -62,7 +90,7 @@ struct proc* proc_create(process_desc_t* descriptor)
     frame->base_frame.pc = (uint32_t) descriptor->entry_point;
     frame->base_frame.cpsr.b.T = 1;
 
-    //setup kernel mode stack
+    //setup kernel handler stack
     if (!descriptor->kernel_mode) {
         p->save_psp -= sizeof(struct context_frame);
         frame = (struct context_frame*) p->save_psp;
@@ -73,7 +101,7 @@ struct proc* proc_create(process_desc_t* descriptor)
     }
 
     memset(p->local_fd_table, 255, PROC_MAXFILES);
-    
+
     if (descriptor->stopped) {
         p->state = PROC_BLOCKED;
     } else {
@@ -81,7 +109,6 @@ struct proc* proc_create(process_desc_t* descriptor)
         proc_enqueue(p);
     }
 
-    mutex_unlock(&p->lock);
     return p;
 }
 

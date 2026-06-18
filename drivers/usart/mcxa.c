@@ -1,6 +1,7 @@
 #include "mcxa.h"
 #include <board/board.h>
 #include <kernel/interrupt.h>
+#include <lib/kprint.h>
 #include <drivers/usart.h>
 
 
@@ -12,8 +13,8 @@ static void* lpuart0_init()
     MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_LPUART0(1);
     MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_PORT0(1);
     
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_LPUART0(1);
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_PORT0(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_RST0_LPUART0(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_RST0_PORT0(1);
 
     PORT0->PCR[2] = PORT_PCR_LK(1) | PORT_PCR_MUX(2) | PORT_PCR_IBE(1);
     PORT0->PCR[3] = PORT_PCR_LK(1) | PORT_PCR_MUX(2);
@@ -29,8 +30,8 @@ static void* lpuart1_init()
     MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_LPUART1(1);
     MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_PORT2(1);
     
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_LPUART1(1);
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_PORT2(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_RST0_LPUART1(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_RST0_PORT2(1);
 
     PORT2->PCR[12] = PORT_PCR_LK(1) | PORT_PCR_MUX(3) | PORT_PCR_IBE(1);
     PORT2->PCR[13] = PORT_PCR_LK(1) | PORT_PCR_MUX(3);
@@ -46,8 +47,8 @@ static void* lpuart2_init()
     MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_LPUART2(1);
     MRCC0->MRCC_GLB_CC0_SET = MRCC_MRCC_GLB_CC0_PORT1(1);
     
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_LPUART2(1);
-    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_CC0_PORT1(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_RST0_LPUART2(1);
+    MRCC0->MRCC_GLB_RST0_SET = MRCC_MRCC_GLB_RST0_PORT1(1);
 
     PORT1->PCR[4] = PORT_PCR_LK(1) | PORT_PCR_MUX(2) | PORT_PCR_IBE(1);
     PORT1->PCR[5] = PORT_PCR_LK(1) | PORT_PCR_MUX(2);
@@ -68,6 +69,15 @@ void usart_mcxa_interrupt()
 
     volatile LPUART_Type* lpuart = usart->usart_base;
     
+    if (lpuart->STAT & LPUART_STAT_RDRF_MASK) {
+        char c = lpuart->DATA;
+        //lpuart->DATA = 'B';
+        uint8_t tmp = usart->rx_head;
+        usart->rx_fifo[tmp] = c;
+        usart->rx_head = (tmp + 1) & USART_RX_FIFO_MSK;
+        return;
+    }
+    
     if (usart->tx_tail != usart->tx_head) {
         uint8_t tmp = (usart->tx_tail + 1) & USART_TX_FIFO_MSK;
         usart->tx_tail = tmp;
@@ -75,15 +85,6 @@ void usart_mcxa_interrupt()
     } else {
         lpuart->CTRL &= ~LPUART_CTRL_TIE_MASK;
     }
-    
-    char c = lpuart->DATA;
-    uint8_t tmp = (usart->rx_head + 1) & USART_RX_FIFO_MSK;
-    if (usart->rx_tail != usart->rx_head) {
-        usart->rx_fifo[tmp] = c;
-        usart->rx_head = tmp;
-    }
-
-    NVIC_ClearPendingIRQ(get_current_interrupt());
 }
 
 void usart_mcxa_init(struct usart_device* usart, struct usart_desc* desc)
@@ -107,10 +108,10 @@ int usart_mcxa_readb(struct usart_device* usart)
         __enable_irq();
         return -1;
     }
-
-    uint8_t tmp = (usart->rx_tail + 1) & USART_RX_FIFO_MSK;
-    usart->rx_tail = tmp;
+    uint8_t tmp = usart->rx_tail;
+    usart->rx_tail = (tmp + 1) & USART_RX_FIFO_MSK;
     __enable_irq();
+    //kputc('A');
     return usart->rx_fifo[tmp];
 }
 

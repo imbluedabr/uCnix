@@ -12,7 +12,9 @@
 #include <uapi/signal.h>
 #include <stdint.h>
 
-__attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set fd_list)
+#define BLOCK_MASK ((1 << SIGSTOP) | (1 << SIGKILL) | (1 << SIGSEGV) | (1 << SIGILL) | (1 << SIGFPE) | (1 << SIGBUS))
+
+__attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set* fd_list, const char** argv)
 {
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0) return fd;
@@ -45,12 +47,15 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set fd_list)
     count = vfs_read(fd, program_base, header.program_break);
     kdbg("bytes_loaded=%d\n", count);
     vfs_close(fd);
-
+    
+    //pushing argv to the user stack
+    uint8_t* user_stack = program_base + (header.program_break - header.stack_size);
     
     process_desc_t new = {
-        .user_stack = program_base + (header.program_break - header.stack_size),
+        .user_stack = user_stack,
         .size = header.stack_size,
         .entry_point = (void (*)(void)) program_base + header.entry_point,
+        .argv = argv,
         .stopped = 1,
         .kernel_mode = 0
     };
@@ -61,7 +66,9 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set fd_list)
         return -EAGAIN;
     }
 
+
     p->ppid = current_process->pid;
+    p->sigmask = current_process->sigmask | BLOCK_MASK;
     p->program_base = program_base;
     p->program_size = header.program_break;
 
@@ -76,7 +83,7 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set fd_list)
     }
 
     for (int i = 0; i < FD_SETSIZE; i++) {
-        if (FD_ISSET(i, fd_list)) {
+        if (FD_ISSET(i, (*fd_list))) {
             struct file* f = proc_fd_get(current_process, i);
             if (!f) continue;
             f->refcount++;
@@ -84,7 +91,9 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set fd_list)
         }
     }
 
-    proc_unblock_process(p);
+    //proc_unblock_process(p);
+    
+    kinfo("exec: succesfully loaded %s!\n", path);
 
     return p->pid;
 
@@ -93,9 +102,11 @@ fmt_error:
     return -ENOEXEC;
 }
 
-pid_t sys_getpid()
+pid_t sys_getpdid(int type)
 {
-    return current_process->pid;
+    if (type == 0) return current_process->pid;
+    if (type == 1) return current_process->ppid;
+    return 0;
 }
 
 int sys_kill(pid_t pid, int sig)
@@ -111,6 +122,27 @@ int sys_kill(pid_t pid, int sig)
     return -EPERM;
 }
 
+int sys_sigprocmask(int how, const sigset_t* set, sigset_t* oldset)
+{
+    sigset_t current_set = current_process->sigmask;
+    if (oldset) *oldset = current_set;
+    if (!set) return 0;
+    sigset_t new_set = *set;
+
+    if (how == SIG_BLOCK) {
+        current_set &= ~(new_set & ~BLOCK_MASK);
+    } else if (how == SIG_UNBLOCK) {
+        current_set |= new_set;
+    } else if (how == SIG_SETMASK) {
+        current_set = new_set | BLOCK_MASK;
+    } else {
+        return -EINVAL;
+    }
+
+    current_process->sigmask = current_set;
+    return 0;
+}
+
 void sys_exit(int return_code)
 {
     proc_stop_scheduling();
@@ -122,6 +154,11 @@ void sys_exit(int return_code)
 pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
 {
     proc_block(current_process);
+    if (current_process->exit_code != SIGCHLD) {
+        *wstatus = -EINTR;
+        return 0;
+    }
+
     struct proc* p = proc_active_list;
     while(p) {
         if (p->pid == pid) {
@@ -129,6 +166,7 @@ pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
             return pid;
         }
     }
+
     *wstatus = -1;
     return 0;
 }

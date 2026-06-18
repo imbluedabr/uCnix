@@ -112,8 +112,8 @@ ifeq ($(CONFIG_STACK_PROT), y)
 	CFLAGS += -fstack-protector-strong
 endif
 
-CFLAGS += -Os
-LDFLAGS += -Os
+CFLAGS += -Os #-fstack-reuse=all -fschedule-insns -fschedule-insns2 -fipa-ra -ftree-sra -finline-small-functions -fstack-reuse=all
+LDFLAGS += -Os #-fstack-reuse=all -fschedule-insns -fschedule-insns2 -fipa-ra -ftree-sra -finline-small-functions -fstack-reuse=all
 ASFLAGS += -fno-lto
 
 ifeq ($(CONFIG_LTO), y)

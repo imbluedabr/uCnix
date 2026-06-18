@@ -1,7 +1,12 @@
 #include <sys/types.h>
 #include <sys/fcntl.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
+#include <sys/select.h>
+#include <sys/wait.h>
+#include <sys/dir.h>
 #include <unistd.h>
+#include <signal.h>
 #include <syscalls.h>
 #include <stddef.h>
 
@@ -51,6 +56,10 @@ int stat(const char* pathname, struct stat* statbuf) {
     SVCALL(12);
 }
 
+[[gnu::naked]] int readdir(int fd, struct dirent* buf, int count) {
+    SVCALL(13);
+}
+
 [[gnu::naked]] int link(const char* oldpath, const char* newpath) {
     SVCALL(15);
 }
@@ -80,14 +89,45 @@ char* getcwd(char* buf, size_t size) {
     SVCALL(38);
 }
 
-[[gnu::naked]] pid_t getpid() {
+//get process data, e.g pid, ppid
+[[gnu::naked]] static pid_t getpdid(int type) {
     SVCALL(39);
 }
 
-//[[gnu::naked]] pid_t getppid();
+pid_t getpid() {
+    return getpdid(0);
+}
+
+pid_t getppid() {
+    return getpdid(1);
+}
+
+[[gnu::naked]] pid_t spawn(const char* path, fd_set* fds, const char** argv) {
+    SVCALL(40);
+}
+
 [[gnu::naked]] void _exit(int status) {
     SVCALL(41);
 }
+
+[[gnu::naked]] pid_t waitpid(pid_t pid, int* wstatus, int options) {
+    SVCALL(42);
+}
+
+pid_t wait(int* wstatus) {
+    return waitpid(-1, wstatus, 0);
+}
+
+
+[[gnu::naked]] int kill(pid_t pid, int sig) {
+    SVCALL(43);
+}
+
+[[gnu::naked]] int sigprocmask(int how, const sigset_t* set, sigset_t* oldset)
+{
+    SVCALL(44);
+}
+
 
 [[gnu::naked]] int setpgid(pid_t pid, pid_t pgid) {
     SVCALL(48);
@@ -97,7 +137,7 @@ char* getcwd(char* buf, size_t size) {
     SVCALL(49);
 }
 
-
-
-
+[[gnu::naked]] int uname(struct utsname* buff) {
+    SVCALL(63);
+}
 

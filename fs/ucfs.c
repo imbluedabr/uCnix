@@ -187,7 +187,7 @@ int ucfs_mount(struct mount* mountpoint, dev_t devno, int mountflags)
     ucfs->base.block_used = sb->block_used;
     ucfs->entries_per_dir = sector_size/sizeof(struct file);
 
-    mountpoint->root = ucfs_read_i(&ucfs->base, 0);
+    mountpoint->root = ucfs_read_i(&ucfs->base, FS_MAKE_UNO(ucfs->base.fsid, 0));
     kdbg("ucfs: read root inode\n");
     if (!mountpoint->root) {
         e_code = -EIO;

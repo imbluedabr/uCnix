@@ -35,14 +35,19 @@ svc_handler:
     stmdb r1!, {r4-r11, r14}
     str r1, [r2]            /* Store the psp in proc->psp*/
     
+    /* invert current mode */
+    ldrb r0, [r2, #32]
+    orn r0, #0
+    strb r0, [r2, #32]
+
     /* swap current psp, control and splim with save_psp, save_control and save_splim */
     mov r0, r2
     ldmia r0, {r1-r6}
     stmia r0!, {r4-r6}
     stmia r0!, {r1-r3}
     sub r0, r0, #24
-    
 
+    
     /* restore the other process mode */
     ldr r0, =current_process
     ldr r2, [r0]

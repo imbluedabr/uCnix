@@ -45,6 +45,9 @@ void kvprintf(const char *fmt, va_list params)
             } else if (*fmt == 'x') {
                 int num = va_arg(params, int);
                 kputs(itoa(num, temp_buff, 16));
+            } else if (*fmt == 'o') {
+                int num = va_arg(params, int);
+                kputs(itoa(num, temp_buff, 8));
             } else if (*fmt == 'd') {
                 int num = va_arg(params, int);
                 kputs(itoa(num, temp_buff, 10));

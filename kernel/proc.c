@@ -3,6 +3,7 @@
 #include <kernel/time.h>
 #include <kernel/device.h>
 #include <kernel/panic.h>
+#include <kernel/page.h>
 #include <lib/stdlib.h>
 #include <lib/kmalloc.h>
 #include <lib/kprint.h>
@@ -217,6 +218,17 @@ int proc_reap(struct proc* p)
         struct file* f = &vfs_file_table[index];
         file_free(f);
     }
+    
+    if (p->kernel_mode) {
+        proc_stack_free((stack_t*) p->splim);
+    } else {
+        proc_stack_free((stack_t*) p->save_splim);
+    }
+    
+    if (p->program_base) {
+        page_free(p->program_base);
+    }
+
     proc_pid_free(p->pid);
     proc_free_process(p);
 
