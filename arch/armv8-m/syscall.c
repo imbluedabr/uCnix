@@ -75,12 +75,12 @@ static void s_fcntl(struct exception_frame* f)
 
 static void s_chdir(struct exception_frame* f)
 {
-
+    f->caller_regs[0] = vfs_chdir((const char*) f->caller_regs[0]);
 }
 
 static void s_mkdir(struct exception_frame* f)
 {
-
+    
 }
 
 static void s_rmdir(struct exception_frame* f)
@@ -115,7 +115,7 @@ static void s_fstatfs(struct exception_frame* f)
 
 static void s_fchmod(struct exception_frame* f)
 {
-
+    
 }
 
 static void s_fchown(struct exception_frame* f)

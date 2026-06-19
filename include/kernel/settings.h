@@ -4,13 +4,13 @@
 #define INIT_CONSOLE_RDEV 0
 #define INIT_CONSOLE_WDEV 0
 #define BOARD_TYPE mcxa153
-#define BOARD_ARCH "armv8-m"
 #define VFS_MAXFILES 32
 #define VFS_MAXMOUNTS 2
 #define PROC_MAXFILES 32
 #define PROC_MAX_PROC 4
 #define PROC_KSTACK_SIZE 512
 #define BOARD_MCXA153
+#define BOARD_ARCH "armv8-m"
 #define FS_UCFS
 #define TTY_DRIVER
 #define ROMDISK_DRIVER

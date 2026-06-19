@@ -34,24 +34,34 @@ ssize_t devfs_write(struct file* f, const char* buff, int count)
     return -EIO;
 }
 
+static inline void mkden(struct dirent* buff, int d_count, ino_t ino, const char* name) {
+    struct dirent* d = &buff[d_count];
+    d->d_ino = ino;
+    d->d_namelen = strnlen(name, FS_INAME_LEN);
+    d->d_offset = d_count;
+    strlcpy(d->d_name, name, FS_INAME_LEN);
+}
+
 int devfs_readdir(struct file* f, struct dirent* buff, int count)
 {
     struct devfs_filesystem* devfs = (struct devfs_filesystem*) f->i->fs;
-
+    
+    int curr_offset = 2;
+    int offset = f->offset;
     int d_count = 0;
+
+    if (offset == 1 && count > 0) {
+        mkden(buff, d_count++, FS_MAKE_UNO(devfs->base.fsid, 255), "..");
+        if (d_count == count) return d_count;
+    }
+
     for (int i = 0; i < 16; i++) {
         struct devfs_file* d = &devfs->files[i];
         if (d->devno != 255) {
-            if (d_count < f->offset) {
-                d_count++;
-                continue;
+            if (curr_offset >= offset) {
+                mkden(buff, d_count++, FS_MAKE_UNO(devfs->base.fsid, i), d->name);
             }
-            
-            buff[d_count].d_ino = FS_MAKE_UNO(devfs->base.fsid, i);
-            buff[d_count].d_namelen = strnlen(d->name, FS_INAME_LEN);
-            buff[d_count].d_offset = i;
-            strlcpy(buff[d_count].d_name, d->name, FS_INAME_LEN);
-            d_count++;
+            curr_offset++;
         }
         if (d_count >= count) break;
     }
@@ -113,6 +123,10 @@ ino_t devfs_lookup(struct inode* dir, const char* name)
 {
     struct devfs_filesystem* devfs = (struct devfs_filesystem*) dir->fs;
     
+    if (strncmp(name, "..", FS_INAME_LEN) == 0) {
+        return FS_MAKE_UNO(devfs->base.fsid, 255);
+    }
+
     for (int i = 0; i < 16; i++) {
         struct devfs_file* f = &devfs->files[i];
         if (strncmp(f->name, name, FS_INAME_LEN) == 0 && f->devno != 255) {

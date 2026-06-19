@@ -47,11 +47,7 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set* fd_list,
     count = vfs_read(fd, program_base, header.program_break);
     kdbg("bytes_loaded=%d\n", count);
     vfs_close(fd);
-
-    tiny_exec_hdr_t* new_hdr = (tiny_exec_hdr_t*) program_base;
-    kdbg("new magic=%s, entry=0x%x\n", new_hdr->magic, program_base + new_hdr->entry_point);
-
-    
+        
     //pushing argv to the user stack
     uint8_t* user_stack = program_base + (header.program_break - header.stack_size);
     
@@ -75,6 +71,13 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set* fd_list,
     p->sigmask = current_process->sigmask | BLOCK_MASK;
     p->program_base = program_base;
     p->program_size = header.program_break;
+    
+    //inherit current working directory
+    mutex_lock(&vfs_cache_lock);
+    struct inode* cwd = current_process->cwd;
+    cwd->refcount++;
+    p->cwd = cwd;
+    mutex_lock(&vfs_cache_lock);
 
     //inherit the credentials of the previous process
     p->credentials = current_process->credentials;

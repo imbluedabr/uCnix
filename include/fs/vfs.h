@@ -136,9 +136,10 @@ int vfs_select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, s
 int vfs_fcntl(int fd, int op, int arg);
 int vfs_ftruncate(int fd, off_t lenght);
 int vfs_chdir(const char* path);
-ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count);
 int vfs_mkdir(const char* path, mode_t mode);
 int vfs_rmdir(const char* path);
+ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count);
+
 int vfs_link(const char* oldpath, const char* newpath);
 int vfs_unlink(const char* path);
 int vfs_mknod(const char* path, mode_t mode, dev_t devno);

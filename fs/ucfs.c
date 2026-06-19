@@ -86,13 +86,18 @@ int ucfs_readdir(struct file* f, struct dirent* buff, int count)
 
     struct ucfs_file* dir = fs->scratch_buffer;
     int d_count = 0;
+    int offset = f->offset;
+    int curr_offset = 1;
     for (int i = 0; i < fs->entries_per_dir; i++) {
         struct ucfs_file* entry = &dir[i];
         if (entry->ino != 255) {
-            strlcpy(buff[d_count].d_name, entry->name, FS_INAME_LEN);
-            buff[d_count].d_namelen = strnlen(entry->name, FS_INAME_LEN);
-            buff[d_count].d_ino = FS_MAKE_UNO(fs->base.fsid, entry->ino);
-            d_count++;
+            if (curr_offset >= offset) {
+                strlcpy(buff[d_count].d_name, entry->name, FS_INAME_LEN);
+                buff[d_count].d_namelen = strnlen(entry->name, FS_INAME_LEN);
+                buff[d_count].d_ino = FS_MAKE_UNO(fs->base.fsid, entry->ino);
+                d_count++;
+            }
+            curr_offset++;
         }
         if (d_count >= count) break;
     }
@@ -185,7 +190,7 @@ int ucfs_mount(struct mount* mountpoint, dev_t devno, int mountflags)
     ucfs->base.block_size = sector_size;
     ucfs->base.block_count = sb->block_count;
     ucfs->base.block_used = sb->block_used;
-    ucfs->entries_per_dir = sector_size/sizeof(struct file);
+    ucfs->entries_per_dir = sector_size/sizeof(struct ucfs_file);
 
     mountpoint->root = ucfs_read_i(&ucfs->base, FS_MAKE_UNO(ucfs->base.fsid, 0));
     kdbg("ucfs: read root inode\n");

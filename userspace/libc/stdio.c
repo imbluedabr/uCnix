@@ -13,6 +13,43 @@ void puts(const char* c)
     write(STDOUT_FILENO, c, strlen(c));
 }
 
+void vsnprintf(char* buff, size_t size, const char* fmt, va_list params) {
+    size_t i = 0;
+    size--;
+    while (*fmt && i < size) {
+        if (*fmt != '%') buff[i++] = *fmt;
+        else {
+            fmt++;
+            if (*fmt == 'c') {
+                char ch = va_arg(params, int);
+                buff[i++] = ch;
+            } else if (*fmt == 's') {
+                char* s = va_arg(params, char*);
+                i += strncpy(buff + i, s, size - i);
+            } else if (*fmt == 'x') {
+                int num = va_arg(params, int);
+                i += itona(num, buff + i, size - i, 16);
+            } else if (*fmt == 'o') {
+                int num = va_arg(params, int);
+                i += itona(num, buff + i, size - i, 8);
+            } else if (*fmt == 'd') {
+                int num = va_arg(params, int);
+                i += itona(num, buff + i, size - i, 10);
+            }
+        }
+        fmt++;
+    }
+    //terminate with null character
+    buff[i] = '\0';
+}
+
+void snprintf(char* buff, size_t size, const char* fmt, ...) {
+    va_list params;
+    va_start(params, fmt);
+    vsnprintf(buff, size, fmt, params);
+    va_end(params);
+}
+
 void vprintf(const char *fmt, va_list params)
 {
     static char temp_buff[32];

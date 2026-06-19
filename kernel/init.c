@@ -79,9 +79,13 @@ void kernel_init_process()
         kerr("vfs: rootfs mount failed! errno=%d\n", status);
         goto abort;
     }
-    struct filesystem* fs = mount_table[0].root->fs;
+    struct inode* root_cwd = mount_table[0].root;
+    struct filesystem* fs = root_cwd->fs;
+    root_cwd->refcount++;
+    current_process->cwd = root_cwd;
     kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
     
+
     kinfo("vfs: mounting devfs on /dev\n");
     status = vfs_mount_dev("/dev", "devfs", 0);
     if (status < 0) {

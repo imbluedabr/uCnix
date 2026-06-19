@@ -19,11 +19,11 @@ test.bin: test.o
 	$(TOOLCHAIN)-gcc $(LDFLAGS) test.o -o test.elf
 	$(TOOLCHAIN)-objcopy -O binary test.elf test.bin
 
-all: test.bin
+all: clean install
 
-install: all
+install: test.bin
 	cp test.bin $(INSTALL_DIR)
 
 clean:
-	rm *.o *.elf *.bin
+	rm -f *.o *.elf *.bin
 

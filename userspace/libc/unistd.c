@@ -1,6 +1,9 @@
 #include <unistd.h>
 #include <sys/fcntl.h>
+#include <sys/stat.h>
+#include <sys/dir.h>
 #include "svcall.h"
+#include "string.h"
 
 [[gnu::naked]] ssize_t read(int fd, void* buf, size_t count) {
     SVCALL(0);
@@ -48,7 +51,20 @@ int chown(const char* path, uid_t owner, gid_t group) {
 }
 
 char* getcwd(char* buf, size_t size) {
-    return NULL;
+    
+    struct stat curr_stat;
+    int curr_dir = open(".", O_RDONLY);
+    fstat(curr_dir, &curr_stat);
+    int parent_dir = open("..", O_RDONLY);
+    
+    struct dirent dirbuff;
+    while(readdir(parent_dir, &dirbuff, 1) == 1) {
+        if (dirbuff.d_ino == curr_stat.st_ino) {
+            strncpy(buf, dirbuff.d_name, FS_INAME_LEN);
+            break;
+        }
+    }
+    return buf;
 }
 
 [[gnu::naked]] void sync(void) {

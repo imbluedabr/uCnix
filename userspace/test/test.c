@@ -3,31 +3,69 @@
 #include <sys/spawn.h>
 #include <sys/dir.h>
 #include <sys/fcntl.h>
+#include <sys/stat.h>
+#include <sys/errno.h>
 #include <signal.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
 
+void builtin_pwd(int argc, char** argv) {
+
+    struct stat curr_stat;
+    int curr = open(".", O_RDONLY);
+    fstat(curr, &curr_stat);
+    int parent = open("..", O_RDONLY);
+
+    struct dirent buf;
+    while(readdir(parent, &buf, 1) == 1) {
+        if (buf.d_ino == curr_stat.st_ino) {
+            puts(buf.d_name);
+            break;
+        }
+    }
+
+    close(parent);
+    close(curr);
+
+    putc('\n');
+}
+
 void builtin_ls(int argc, char** argv) {
-    if (argc != 2) {
+    int dir;
+
+    if (argc == 1) {
+        dir = open(".", O_RDONLY);
+    } else if (argc == 2) {
+        dir = open(argv[1], O_RDONLY);
+    } else {
         puts("ls: invalid argument(s)\n");
         return;
     }
-
-    int dir = open(argv[1], O_RDONLY);
+    
     if (dir < 0) {
         puts("ls: path not found\n");
         return;
     }
 
     struct dirent dirbuff;
-
-    readdir(dir, &dirbuff, 1);
-    
-    printf("%s\n", dirbuff.d_name);
+    while (readdir(dir, &dirbuff, 1) == 1) {
+        printf("%s ", dirbuff.d_name);
+    }
+    putc('\n');
 
     close(dir);
+}
+
+void builtin_cd(int argc, char** argv) {
+    if (argc != 2) {
+        puts("cd: invalid argument(s)\n");
+    } else {
+        if (chdir(argv[1]) == -ENOENT) {
+            puts("cd: path not found\n");
+        }
+    }
 }
 
 void execute_command(char* buffer)
@@ -54,6 +92,10 @@ void execute_command(char* buffer)
         _exit(0);
     } else if (strcmp(arg_vec[0], "ls") == 0) {
         builtin_ls(argc, arg_vec);
+    } else if (strcmp(arg_vec[0], "cd") == 0) {
+        builtin_cd(argc, arg_vec);
+    } else if (strcmp(arg_vec[0], "pwd") == 0) {
+        builtin_pwd(argc, arg_vec);
     } else {
         printf("sh: %s: command not found\n", arg_vec[0]);
     }
@@ -61,14 +103,6 @@ void execute_command(char* buffer)
 
 int main(int argc, char** argv)
 {
-    puts("Hello from /bin/test.bin!\n");
-    printf("pid: %d, ppid: %d\n", getpid(), getppid());
-    puts("arguments passed:\n");
-    printf("argc: %d\n", argc);
-    for (int i = 0; i < argc; i++) {
-        printf("arg%d: \"%s\"\n", i, argv[i]);
-    }
-
     struct utsname ubuff;
     uname(&ubuff);
     printf("uname: %s %s %s %s %s\n", ubuff.sysname, ubuff.nodename, ubuff.release, ubuff.version, ubuff.machine);
@@ -78,8 +112,7 @@ int main(int argc, char** argv)
         puts("# ");
         memset(cmd_buff, 0, 32);
         read(STDIN_FILENO, cmd_buff, 32);
-        //execute_command(cmd_buff);
-        printf("cmd: %s\n", cmd_buff);
+        execute_command(cmd_buff);
     }
 
     return 0;

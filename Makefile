@@ -14,7 +14,6 @@ $(shell echo "#define INIT_PATH \"$(CONFIG_INIT_PATH)\"" >> $(SETTINGS_FILE))
 $(shell echo "#define INIT_CONSOLE_RDEV $(CONFIG_INIT_CONSOLE_RDEV)" >> $(SETTINGS_FILE))
 $(shell echo "#define INIT_CONSOLE_WDEV $(CONFIG_INIT_CONSOLE_WDEV)" >> $(SETTINGS_FILE))
 $(shell echo "#define BOARD_TYPE $(CONFIG_BOARD_TYPE)" >> $(SETTINGS_FILE))
-$(shell echo "#define BOARD_ARCH \"$(CONFIG_BOARD_ARCH)\"" >> $(SETTINGS_FILE))
 $(shell echo "#define VFS_MAXFILES $(CONFIG_VFS_MAXFILES)" >> $(SETTINGS_FILE))
 $(shell echo "#define VFS_MAXMOUNTS $(CONFIG_VFS_MAXMOUNTS)" >> $(SETTINGS_FILE))
 $(shell echo "#define PROC_MAXFILES $(CONFIG_PROC_MAXFILES)" >> $(SETTINGS_FILE))
@@ -30,6 +29,8 @@ ARCH_CFLAGS = -mthumb -mcpu=cortex-m33+nodsp -mfloat-abi=soft -std=gnu11 -DCPU_M
 ARCH_LDFLAGS = -mthumb -mcpu=cortex-m33+nodsp -Wl,-z,max-page-size=4
 $(shell echo "#define BOARD_MCXA153" >> $(SETTINGS_FILE))
 endif
+
+$(shell echo "#define BOARD_ARCH \"$(ARCH)\"" >> $(SETTINGS_FILE))
 
 # the filesystems
 FS_SELECT = fs/vfs.c fs/devfs.c
@@ -136,7 +137,11 @@ $(BUILD)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(ASFLAGS) -c $< -o $@
 
-rootfs.bin:
+userspace:
+	$(MAKE) -C $(ROOT)/userspace/libc all
+	$(MAKE) -C $(ROOT)/userspace/test all
+
+rootfs.bin: userspace
 	$(ROOT)/tools/mkfs.elf $(ROOT)/staging
 
 rootfs.o: rootfs.bin

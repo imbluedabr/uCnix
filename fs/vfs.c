@@ -182,6 +182,21 @@ void vfs_init()
 //lookup an inode using a name and parent directory inode
 static inline ino_t vfs_read_dentry(struct inode* dir, const char* name)
 {
+    if (strncmp(name, ".", FS_INAME_LEN) == 0) {
+        return dir->ino;
+    }
+    
+    if (strncmp(name, "..", FS_INAME_LEN) == 0) {
+        for (int i = 0; i < VFS_MAXMOUNTS; i++) {
+            struct mount* m = &mount_table[i];
+            if (m->root == dir) {
+                if (m->mountpoint) {
+                    dir = m->mountpoint;
+                }
+            }
+        }
+    }
+
     for (int i = 0; i < DENTRY_CACHE_LEN; i++) {
         struct dentry* d = &dentry_cache[i];
 
@@ -229,6 +244,7 @@ static inline struct inode* check_mount(struct inode* node) {
                 struct inode* root = m->root;
                 mutex_unlock(&vfs_cache_lock);
                 inode_free(node);
+                root->refcount++;
                 return root;
             }
         }
@@ -265,7 +281,7 @@ struct inode* vfs_walk_path(const char* path, int mode)
     while (path[path_idx]) {
         if (path[path_idx] == '/') {
             path_cpy[path_idx] = '\0';
-
+            
             ino_t ino = vfs_read_dentry(current_dir, current_word);
             if (ino < 0) goto error;
             struct inode* next = vfs_read_inode(current_dir->fs, ino);
@@ -281,10 +297,11 @@ struct inode* vfs_walk_path(const char* path, int mode)
 
     if (mode != VFS_LOOKUP_BASE && *current_word) {
         ino_t ino = vfs_read_dentry(current_dir, current_word);
+        if (ino < 0) goto error;
         struct inode* next = vfs_read_inode(current_dir->fs, ino);
         if (!next) goto error;
         inode_free(current_dir);
-        current_dir = next;
+        current_dir = check_mount(next);
     }
 
     return current_dir;
@@ -471,7 +488,11 @@ int vfs_ftruncate(int fd, off_t lenght)
 
 int vfs_chdir(const char* path)
 {
-
+    struct inode* newcwd = vfs_walk_path(path, 0);
+    if (!newcwd) return -ENOENT;
+    inode_free(current_process->cwd);
+    current_process->cwd = newcwd;
+    return 0;
 }
 
 ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count)
@@ -484,6 +505,14 @@ ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count)
     //check if it is a directory or nah
     if (!(f->i->perm.mode & S_IFDIR)) {
         return -ENOTDIR;
+    }
+    if (f->offset == 0 && count > 0) {
+        buf[0].d_ino = f->i->ino;
+        buf[0].d_namelen = 2;
+        buf[0].d_offset = 0;
+        strlcpy(buf[0].d_name, ".", FS_INAME_LEN);
+        f->offset++;
+        if (--count == 0) return 1;
     }
 
     ssize_t n = f->i->fs->fops->readdir(f, buf, count);

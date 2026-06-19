@@ -20,7 +20,7 @@ typedef enum {
     SYS_RMDIR = 12,
     SYS_READDIR = 13,
     //SYS_CHROOT,
-    //SYS_RENAME = 14,
+    //SYS_GETCWD = 14,
     SYS_LINK = 15,
     SYS_UNLINK = 16,
     //SYS_SYMLINK,

@@ -209,13 +209,14 @@ void ucfs_listdir(struct ucfs_file* file, int depth)
             struct ucfs_inode* f = inode_read(entries[i].ino);
             printf("%*s%o\t%d\t%d\t%d\t%d\t%d\t%s\n", depth*4, "",f->perm.mode, f->nlinks, f->perm.group, f->perm.user, f->size, f->mtime, entries[i].name);
             if (f->perm.mode & FS_IFDIR) {
+                if (strcmp(entries[i].name, "..") == 0 || strcmp(entries[i].name, ".") == 0) continue;
                 ucfs_listdir(&entries[i], depth + 1);
             }
         }
     }
 }
 
-void generate_fs(const char* path, struct ucfs_file* root_dir)
+void generate_fs(const char* path, struct ucfs_file* root_dir, int parent_ino)
 {
     DIR *dir;
     struct dirent *entry;
@@ -223,20 +224,24 @@ void generate_fs(const char* path, struct ucfs_file* root_dir)
     dir = opendir(path);
     struct ucfs_file* current_dir = root_dir;
     while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, "..") == 0) {
+            ucfs_mklink(current_dir, parent_ino, "..");
+            continue;
+        }
+        if (strcmp(entry->d_name, ".") == 0) continue;
+
         char new_path[1024];
         snprintf(new_path, sizeof(new_path), "%s/%s", path, entry->d_name);
-
+        
         if (entry->d_type == DT_DIR) {
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-                continue;
-                struct ucfs_file* new_dir = ucfs_mkfile(current_dir, entry->d_name, (struct permissions) {
-                    .user = 100,
-                    .group = 100,
-                    .mode = FS_IFDIR | FS_IRUSR | FS_IXUSR
-                    });
+            struct ucfs_file* new_dir = ucfs_mkfile(current_dir, entry->d_name, (struct permissions) {
+                .user = 100,
+                .group = 100,
+                .mode = FS_IFDIR | FS_IRUSR | FS_IXUSR
+                });
             ucfs_initdir(new_dir);
             printf("entering directory %s\n", entry->d_name);
-            generate_fs(new_path, new_dir);
+            generate_fs(new_path, new_dir, current_dir->ino);
             printf("leaving directory %s\n", entry->d_name);
         } else {
             struct ucfs_file* new_file = ucfs_mkfile(current_dir, entry->d_name, (struct permissions) {
@@ -268,7 +273,7 @@ int main(int argc, char** argv)
     disk_init();
     ucfs_mkroot(&root);
 
-    generate_fs(argv[1], &root);
+    generate_fs(argv[1], &root, root.ino);
     
     ucfs_listdir(&root, 0);
     disk_sync();
