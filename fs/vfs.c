@@ -38,7 +38,10 @@ struct inode* inode_alloc()
         free_list = i->next;
         free_list_size--;
     }
-    if (!i) return NULL;
+    if (!i) {
+        mutex_unlock(&vfs_cache_lock);
+        return NULL;
+    }
 
     i->next = cache_list;
     cache_list = i;
@@ -224,6 +227,7 @@ static inline struct inode* vfs_read_inode(struct filesystem* fs, ino_t ino)
     while (current) {
         if (current->ino == ino) {
             current->refcount++;
+            mutex_unlock(&vfs_cache_lock);
             return current;
         }
         current = current->next;
@@ -254,26 +258,12 @@ static inline struct inode* check_mount(struct inode* node) {
     return node;
 }
 
-struct inode* vfs_walk_path(const char* path, int mode)
-{
+static struct inode* vfs_walk_rel(struct inode* base, const char* path, int mode) {
     int path_idx = 0;
     char path_cpy[FS_PATH_LEN+1];
     char* current_word = path_cpy;
 
-    struct inode* current_dir;
-    
-    //absolute path
-    if (*path == '/') {
-        current_dir = mount_table[0].root;
-        path_idx++;
-        current_word++;
-    } else {
-        mutex_lock(&vfs_cache_lock);
-        current_dir = current_process->cwd;
-        current_process->cwd->refcount++;
-        mutex_lock(&vfs_cache_lock);
-    }
-    if (!current_dir) {
+    if (!base) {
         thread_panic("vfs: cwd not set!");
     }
     strlcpy(path_cpy + path_idx, path + path_idx, FS_PATH_LEN);
@@ -282,13 +272,12 @@ struct inode* vfs_walk_path(const char* path, int mode)
         if (path[path_idx] == '/') {
             path_cpy[path_idx] = '\0';
             
-            ino_t ino = vfs_read_dentry(current_dir, current_word);
+            ino_t ino = vfs_read_dentry(base, current_word);
             if (ino < 0) goto error;
-            struct inode* next = vfs_read_inode(current_dir->fs, ino);
+            struct inode* next = vfs_read_inode(base->fs, ino);
             if (!next) goto error;
-            inode_free(current_dir);
-            current_dir = check_mount(next);
-            
+            inode_free(base);
+            base = check_mount(next);
             
             current_word = path_cpy + path_idx + 1;
         }
@@ -296,18 +285,36 @@ struct inode* vfs_walk_path(const char* path, int mode)
     }
 
     if (mode != VFS_LOOKUP_BASE && *current_word) {
-        ino_t ino = vfs_read_dentry(current_dir, current_word);
+        ino_t ino = vfs_read_dentry(base, current_word);
         if (ino < 0) goto error;
-        struct inode* next = vfs_read_inode(current_dir->fs, ino);
+        struct inode* next = vfs_read_inode(base->fs, ino);
         if (!next) goto error;
-        inode_free(current_dir);
-        current_dir = check_mount(next);
+        inode_free(base);
+        base = check_mount(next);
     }
 
-    return current_dir;
+    return base;
 error:
-    inode_free(current_dir);
+    inode_free(base);
     return NULL;
+}
+
+struct inode* vfs_walk_path(const char* path, int mode)
+{
+
+    struct inode* current_dir;
+    
+    //absolute path
+    if (*path == '/') {
+        current_dir = mount_table[0].root;
+        path++;
+    } else {
+        mutex_lock(&vfs_cache_lock);
+        current_dir = current_process->cwd;
+        current_process->cwd->refcount++;
+        mutex_unlock(&vfs_cache_lock);
+    }
+    return vfs_walk_rel(current_dir, path, mode);
 }
 
 int vfs_mount_root(dev_t devno, const char* filesystemtype, int mountflags)
@@ -483,15 +490,17 @@ int vfs_fcntl(int fd, int op, int arg)
 
 int vfs_ftruncate(int fd, off_t lenght)
 {
-
+    return 0;
 }
 
-int vfs_chdir(const char* path)
+int vfs_fchdir(int fd)
 {
-    struct inode* newcwd = vfs_walk_path(path, 0);
-    if (!newcwd) return -ENOENT;
+    struct file* newcwd = proc_fd_get(current_process, fd);
     inode_free(current_process->cwd);
-    current_process->cwd = newcwd;
+    mutex_lock(&vfs_cache_lock);
+    newcwd->i->refcount++;
+    current_process->cwd = newcwd->i;
+    mutex_unlock(&vfs_cache_lock);
     return 0;
 }
 
@@ -521,6 +530,29 @@ ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count)
     mutex_unlock(&vfs_file_lock);
 
     return n;
+}
+
+int vfs_openat(int dirfd, const char* pathname, int flags)
+{
+    struct file* dir = proc_fd_get(current_process, dirfd);
+    if (!dir) return -EBADF;
+    
+    struct inode* i = vfs_walk_rel(dir->i, pathname, 0);
+    if (!i) {
+        return -ENOENT;
+    }
+
+    struct file* f = file_alloc();
+    if (!f) {
+        return -ENFILE;
+    }
+
+    f->flags = flags;
+    f->i = i;
+    f->offset = 0;
+    int fd = proc_fd_add(current_process, f);
+
+    return fd;
 }
 
 int vfs_mkdir(const char* path, mode_t mode)

@@ -9,6 +9,7 @@ const struct file_ops devfs_file_ops = {
     .read = &devfs_read,
     .write = devfs_write,
     .readdir = &devfs_readdir,
+    .fstat = &devfs_fstat,
     .mount = &devfs_mount,
     .mknod = &devfs_mknod,
     .lookup = &devfs_lookup,
@@ -70,7 +71,31 @@ int devfs_readdir(struct file* f, struct dirent* buff, int count)
 }
 
 //off_t (*lseek)(struct file* f, off_t offset, int whence);
-//int (*fstat)(struct file* f, struct stat* statbuf);
+int devfs_fstat(struct file* f, struct stat* statbuf)
+{
+    struct inode* node = f->i;
+    struct devfs_filesystem* devfs = (struct devfs_filesystem*) node->fs;
+
+    uint32_t index = FS_GET_INO(node->ino);
+    if (index < 16) {
+        struct devfs_file* d = &devfs->files[index];
+        statbuf->st_rdev = d->devno;
+    }
+    
+    statbuf->st_dev = 0;
+    statbuf->st_ino = node->ino;
+    statbuf->st_mode = node->perm.mode;
+    statbuf->st_nlink = 1;
+    statbuf->st_uid = node->perm.user;
+    statbuf->st_gid = node->perm.group;
+    statbuf->st_size = node->size;
+    statbuf->st_blksize = 0;
+    statbuf->st_atime = 0;
+    statbuf->st_mtime = 0;
+    statbuf->st_ctime = 0;
+
+    return 0;
+}
 //off_t (*ftruncate)(struct file* f, off_t lenght);
 
 //inode operations

@@ -139,7 +139,7 @@ $(BUILD)/%.o: %.S
 
 userspace:
 	$(MAKE) -C $(ROOT)/userspace/libc all
-	$(MAKE) -C $(ROOT)/userspace/test all
+	$(MAKE) -C $(ROOT)/userspace/sh all
 
 rootfs.bin: userspace
 	$(ROOT)/tools/mkfs.elf $(ROOT)/staging

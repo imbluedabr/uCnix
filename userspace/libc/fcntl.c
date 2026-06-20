@@ -5,6 +5,11 @@
     SVCALL(2);
 }
 
+[[gnu::naked]] int openat(int dirfd, const char* pathname, int flags) {
+    SVCALL(14);
+}
+
+
 [[gnu::naked]] int fcntl(int fd, int op, void* arg) {
     SVCALL(9);
 }

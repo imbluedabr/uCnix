@@ -15,12 +15,12 @@ typedef enum {
     //SYS_FLOCK,
     //SYS_FSYNC,
     //SYS_FTRUNCATE,
-    SYS_CHDIR = 10,
+    SYS_FCHDIR = 10,
     SYS_MKDIR = 11,
     SYS_RMDIR = 12,
     SYS_READDIR = 13,
     //SYS_CHROOT,
-    //SYS_GETCWD = 14,
+    SYS_OPENAT = 14,
     SYS_LINK = 15,
     SYS_UNLINK = 16,
     //SYS_SYMLINK,
@@ -71,17 +71,16 @@ typedef enum {
     SYS_UTIMES = 54,
 
     // user/group api
-    SYS_GETUID = 55,
-    SYS_GETGID = 56,
+    SYS_GETREUID = 55,
+    SYS_GETREGID = 56,
     SYS_SETREUID = 57,
     SYS_SETREGID = 58,
     SYS_GETGROUPS = 59,
     SYS_SETGROUPS = 60,
 
     // misc api
-    SYS_VHANGUP = 61,
-    SYS_SYSCTL = 62,
-    SYS_UNAME = 63,
+    SYS_SYSCTL = 61,
+    SYS_UNAME = 62,
     SYS_REBOOT,
     SYS_PIPE,
 

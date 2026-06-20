@@ -19,7 +19,7 @@ ssize_t devfs_read(struct file* f, char* buff, int count);
 ssize_t devfs_write(struct file* f, const char* buff, int count);
 int devfs_readdir(struct file* f, struct dirent* buff, int count);
 //off_t (*lseek)(struct file* f, off_t offset, int whence);
-//int (*fstat)(struct file* f, struct stat* statbuf);
+int devfs_fstat(struct file* f, struct stat* statbuf);
 //off_t (*ftruncate)(struct file* f, off_t lenght);
 
 //inode operations

@@ -274,6 +274,7 @@ int proc_kill(pid_t pid, int sig)
         proc_block(p);
     } else if (action == 3) {
         proc_mark_zombie(p, 128 + sig);
+        proc_kill(p->ppid, SIGCHLD);
         proc_restart_scheduling();
     } else {
         proc_restart_scheduling();

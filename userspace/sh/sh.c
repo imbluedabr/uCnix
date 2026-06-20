@@ -5,32 +5,74 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <sys/errno.h>
+#include <sys/select.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
+static char path_buff[32];
 
 void builtin_pwd(int argc, char** argv) {
+    int pos = sizeof(path_buff);
+    path_buff[--pos] = '\0';
 
-    struct stat curr_stat;
     int curr = open(".", O_RDONLY);
-    fstat(curr, &curr_stat);
-    int parent = open("..", O_RDONLY);
 
-    struct dirent buf;
-    while(readdir(parent, &buf, 1) == 1) {
-        if (buf.d_ino == curr_stat.st_ino) {
-            puts(buf.d_name);
+    struct stat curr_st, parent_st;
+
+    for (;;) {
+        fstat(curr, &curr_st);
+
+        int parent = openat(curr, "..", O_RDONLY);
+        fstat(parent, &parent_st);
+
+        // reached global root
+        if (curr_st.st_dev == parent_st.st_dev &&
+            curr_st.st_ino == parent_st.st_ino) {
+            close(parent);
+            break;
+        }
+
+        struct dirent d;
+        int found = 0;
+
+        while (readdir(parent, &d, 1) == 1) {
+            int cand = openat(parent, d.d_name, O_RDONLY);
+            struct stat st;
+            fstat(cand, &st);
+            close(cand);
+
+            if (st.st_dev == curr_st.st_dev &&
+                st.st_ino == curr_st.st_ino) {
+                int n = strlen(d.d_name);
+                pos -= n;
+                memcpy(path_buff + pos, d.d_name, n);
+                path_buff[--pos] = '/';
+                found = 1;
+                break;
+            }
+        }
+
+        close(curr);
+        curr = parent;
+
+        if (!found) {
+            puts("pwd: could not find parent\n");
+            // inconsistent FS; bail
             break;
         }
     }
 
-    close(parent);
     close(curr);
 
-    putc('\n');
+    if (pos == sizeof(path_buff) - 1)
+        puts("/\n");
+    else
+        printf("%s\n", path_buff + pos);
 }
+
 
 void builtin_ls(int argc, char** argv) {
     int dir;
@@ -68,6 +110,20 @@ void builtin_cd(int argc, char** argv) {
     }
 }
 
+int spawn_command(const char* path, char** argv) {
+    fd_set fds;
+    FD_ZERO(fds);
+    FD_SET(STDIN_FILENO, fds);
+    FD_SET(STDOUT_FILENO, fds);
+    FD_SET(STDERR_FILENO, fds);
+    pid_t pid = spawn(path, &fds, (const char**) argv);
+    if (pid < 0) return -1;
+    kill(pid, SIGCONT);
+    int wstatus = 0;
+    waitpid(pid, &wstatus, 0);
+    return wstatus;
+}
+
 void execute_command(char* buffer)
 {
     static char* arg_vec[8];
@@ -97,6 +153,17 @@ void execute_command(char* buffer)
     } else if (strcmp(arg_vec[0], "pwd") == 0) {
         builtin_pwd(argc, arg_vec);
     } else {
+        snprintf(path_buff, sizeof(path_buff), "/bin/%s", arg_vec[0]);
+        int wstatus = spawn_command(path_buff, arg_vec);
+        if (wstatus > -1) {
+            printf("exit: %d\n", wstatus);
+            return;
+        }
+        wstatus = spawn_command(arg_vec[0], arg_vec);
+        if (wstatus > -1) {
+            printf("exit: %d\n", wstatus);
+            return;
+        }
         printf("sh: %s: command not found\n", arg_vec[0]);
     }
 }

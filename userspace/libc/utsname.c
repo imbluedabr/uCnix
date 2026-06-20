@@ -2,6 +2,6 @@
 #include "svcall.h"
 
 [[gnu::naked]] int uname(struct utsname* buff) {
-    SVCALL(63);
+    SVCALL(62);
 }
 

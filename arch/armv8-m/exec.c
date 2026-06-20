@@ -9,6 +9,7 @@
 
 #include <uapi/sys/fcntl.h>
 #include <uapi/sys/errno.h>
+#include <uapi/sys/wait.h>
 #include <uapi/signal.h>
 #include <stdint.h>
 
@@ -77,7 +78,7 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set* fd_list,
     struct inode* cwd = current_process->cwd;
     cwd->refcount++;
     p->cwd = cwd;
-    mutex_lock(&vfs_cache_lock);
+    mutex_unlock(&vfs_cache_lock);
 
     //inherit the credentials of the previous process
     p->credentials = current_process->credentials;
@@ -121,12 +122,12 @@ int sys_kill(pid_t pid, int sig)
     struct proc* p = proc_get_process(pid);
     if (!p) return -ESRCH;
     
-    if (current_process->credentials.euid == p->credentials.euid || current_process->credentials.egid == p->credentials.egid) {
-        proc_free_process(p);
-        return proc_kill(pid, sig);
-    }
     proc_free_process(p);
-    return -EPERM;
+    return proc_kill(pid, sig);
+    //if (current_process->credentials.euid == p->credentials.euid || current_process->credentials.egid == p->credentials.egid) {
+    /*}
+    proc_free_process(p);
+    return -EPERM;*/
 }
 
 int sys_sigprocmask(int how, const sigset_t* set, sigset_t* oldset)
@@ -155,27 +156,56 @@ void sys_exit(int return_code)
     proc_stop_scheduling();
     proc_mark_zombie(current_process, return_code);
     proc_kill(current_process->ppid, SIGCHLD);
+
     proc_schedule(); //in case proc_kill doesnt trigger the scheduler
 }
 
 pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
 {
+    
+    mutex_lock(&proc_acces_lock);
+    
+    struct proc* p = proc_active_list;
+    while(p) {
+        if (p->ppid == current_process->pid) {
+            pid_t p_pid = p->pid;
+            if (p->state == PROC_ZOMBIE && (p_pid == pid || pid == -1)) {
+                mutex_unlock(&proc_acces_lock);
+                int exit_code = proc_reap(p);
+                if (wstatus) *wstatus = exit_code;
+                current_process->exit_code = 0; //clear signal
+                return p_pid;
+            }
+        }
+    }
+    mutex_unlock(&proc_acces_lock);
+
+    if (options == WNOHANG) {
+        return -ECHILD;
+    }
+    
     proc_block(current_process);
     if (current_process->exit_code != SIGCHLD) {
         *wstatus = -EINTR;
         return 0;
     }
 
-    struct proc* p = proc_active_list;
+    mutex_lock(&proc_acces_lock);
     while(p) {
-        if (p->pid == pid) {
-            *wstatus = proc_reap(p);
-            return pid;
+        if (p->ppid == current_process->pid) {
+            pid_t p_pid = p->pid;
+            if (p->state == PROC_ZOMBIE && (p_pid == pid || pid == -1)) {
+                mutex_unlock(&proc_acces_lock);
+                int exit_code = proc_reap(p);
+                if (wstatus) *wstatus = exit_code;
+                return p_pid;
+            }
         }
     }
-
-    *wstatus = -1;
-    return 0;
+   
+    mutex_unlock(&proc_acces_lock);
+    
+    return -ECHILD;
 }
 
 

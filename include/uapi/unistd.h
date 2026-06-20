@@ -8,6 +8,7 @@ int close(int fd);
 off_t lseek(int fd, off_t offset, int whence);
 int access(const char* pathname, int mode);
 int chdir(const char* path);
+int fchdir(int dirfd);
 int rmdir(const char* pathname);
 int link(const char* oldpath, const char* newpath);
 int unlink(const char* pathname);

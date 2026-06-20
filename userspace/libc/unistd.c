@@ -25,8 +25,16 @@
     SVCALL(7);
 }
 
-[[gnu::naked]] int chdir(const char* path) {
+[[gnu::naked]] int fchdir(int fd) {
     SVCALL(10);
+}
+
+int chdir(const char* path) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) return fd;
+    int status = fchdir(fd);
+    close(fd);
+    return status;
 }
 
 [[gnu::naked]] int rmdir(const char* pathname) {
@@ -47,24 +55,14 @@
 
 int chown(const char* path, uid_t owner, gid_t group) {
     int fd = open(path, O_RDONLY);
-    return fchown(fd, owner, group);
+    int status = fchown(fd, owner, group);
+    close(fd);
+    return status;
 }
 
 char* getcwd(char* buf, size_t size) {
     
-    struct stat curr_stat;
-    int curr_dir = open(".", O_RDONLY);
-    fstat(curr_dir, &curr_stat);
-    int parent_dir = open("..", O_RDONLY);
-    
-    struct dirent dirbuff;
-    while(readdir(parent_dir, &dirbuff, 1) == 1) {
-        if (dirbuff.d_ino == curr_stat.st_ino) {
-            strncpy(buf, dirbuff.d_name, FS_INAME_LEN);
-            break;
-        }
-    }
-    return buf;
+    return NULL;
 }
 
 [[gnu::naked]] void sync(void) {

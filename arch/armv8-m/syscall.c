@@ -73,9 +73,9 @@ static void s_fcntl(struct exception_frame* f)
     f->caller_regs[0] = vfs_fcntl(f->caller_regs[0], f->caller_regs[1], f->caller_regs[2]);
 }
 
-static void s_chdir(struct exception_frame* f)
+static void s_fchdir(struct exception_frame* f)
 {
-    f->caller_regs[0] = vfs_chdir((const char*) f->caller_regs[0]);
+    f->caller_regs[0] = vfs_fchdir(f->caller_regs[0]);
 }
 
 static void s_mkdir(struct exception_frame* f)
@@ -91,6 +91,11 @@ static void s_rmdir(struct exception_frame* f)
 static void s_readdir(struct exception_frame* f)
 {
     f->caller_regs[0] = vfs_readdir(f->caller_regs[0], (struct dirent*) f->caller_regs[1], f->caller_regs[2]);
+}
+
+static void s_openat(struct exception_frame* f)
+{
+    f->caller_regs[0] = vfs_openat(f->caller_regs[0], (const char*) f->caller_regs[1], f->caller_regs[2]);
 }
 
 static void s_link(struct exception_frame* f)
@@ -191,10 +196,11 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_ACCESS] = s_access,
     [SYS_SELECT] = s_select,
     [SYS_FCNTL] = s_fcntl,
-    [SYS_CHDIR] = s_chdir,
+    [SYS_FCHDIR] = s_fchdir,
     [SYS_MKDIR] = s_mkdir,
     [SYS_RMDIR] = s_rmdir,
     [SYS_READDIR] = s_readdir,
+    [SYS_OPENAT] = s_openat,
     [SYS_LINK] = s_link,
     [SYS_UNLINK] = s_unlink,
     [SYS_MKNOD] = s_mknod,
@@ -236,8 +242,7 @@ void syscall_thread_main()
 {
     struct context_frame* frame = (struct context_frame*) current_process->save_psp;
     uint8_t svcno = *((uint8_t*) frame->base_frame.pc - 2);
-    //kdbg("svc:, %d, pid: %d\n", svcno, current_process->pid);
-   
+    //kdbg("\nsvc: %d, pid: %d\n", svcno, current_process->pid);
     syscall_t func = s_table[svcno];
     if (!func) {
         frame->base_frame.caller_regs[0] = -ENOSYS;

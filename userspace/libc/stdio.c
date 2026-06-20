@@ -13,8 +13,8 @@ void puts(const char* c)
     write(STDOUT_FILENO, c, strlen(c));
 }
 
-void vsnprintf(char* buff, size_t size, const char* fmt, va_list params) {
-    size_t i = 0;
+void vsnprintf(char* buff, int size, const char* fmt, va_list params) {
+    int i = 0;
     size--;
     while (*fmt && i < size) {
         if (*fmt != '%') buff[i++] = *fmt;
@@ -43,7 +43,7 @@ void vsnprintf(char* buff, size_t size, const char* fmt, va_list params) {
     buff[i] = '\0';
 }
 
-void snprintf(char* buff, size_t size, const char* fmt, ...) {
+void snprintf(char* buff, int size, const char* fmt, ...) {
     va_list params;
     va_start(params, fmt);
     vsnprintf(buff, size, fmt, params);

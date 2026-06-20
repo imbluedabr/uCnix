@@ -109,7 +109,7 @@ void kernel_init_process()
     FD_SET(stdin, fd_list);
     FD_SET(stdout, fd_list);
     FD_SET(stderr, fd_list);
-    status = sys_spawn("/bin/test.bin", &fd_list, NULL);
+    status = sys_spawn(INIT_PATH, &fd_list, NULL);
     
     //reparent userspace init
     int irq = disable_interrupts();
