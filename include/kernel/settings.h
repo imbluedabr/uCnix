@@ -1,6 +1,6 @@
 #define ROOTFS_DEVNO ((2 << 4) | 0)
 #define ROOTFS_TYPE "ucfs"
-#define INIT_PATH "/bin/sh"
+#define INIT_PATH "/bin/init"
 #define INIT_CONSOLE_RDEV 0
 #define INIT_CONSOLE_WDEV 0
 #define BOARD_TYPE mcxa153

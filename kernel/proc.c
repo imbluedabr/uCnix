@@ -40,7 +40,8 @@ inline stack_t* proc_stack_alloc()
 inline void proc_stack_free(stack_t* stack)
 {
     if (stack_free_list_top > 4) thread_panic("stack memory leak!");
-    stack_free_list[stack_free_list_top++] = stack - stack_array; 
+    int index = stack - stack_array;
+    stack_free_list[stack_free_list_top++] = index; 
 }
 
 inline pid_t proc_pid_alloc()
@@ -235,12 +236,15 @@ int proc_reap(struct proc* p)
     return p->exit_code;
 }
 
-int proc_kill(pid_t pid, int sig)
+int proc_send_sig(pid_t pid, int sig)
 {
+    if (sig > 31) return -EINVAL;
+    if (sig < 0) return -EINVAL;
+    //kdbg("sig: %d to %d from %d\n", sig, pid, current_process->pid);
+
     struct proc* p = proc_get_process(pid);
     if (!p) return -ESRCH;
     proc_stop_scheduling();
-    //kdbg("sending sig %d\n", sig);
     int action = 0;
     if (p->sigmask & (1 << sig)) {
         p->exit_code = sig;
@@ -281,5 +285,30 @@ int proc_kill(pid_t pid, int sig)
     }
     return 0;
 }
+
+int proc_kill(pid_t pid, int sig)
+{
+    if (pid > -1) return proc_send_sig(pid, sig);
+    if (pid < 0) {
+        uint8_t proc_group[PROC_MAX_PROC];
+        int proc_count = 0;
+        proc_stop_scheduling();
+        struct proc* p = proc_active_list;
+        while(p) {
+            if (p->pgrp == -pid) {
+                proc_group[proc_count++] = p->pid;
+            }
+            p = p->next;
+        }
+        proc_restart_scheduling();
+        for (int i = 0; i < proc_count; i++) {
+            int status = proc_send_sig(proc_group[i], sig);
+            if (status < 0) return status;
+        }
+        return 0;
+    }
+    return -EINVAL;
+}
+
 
 

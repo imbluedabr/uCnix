@@ -13,6 +13,6 @@ struct termios {
 
 #define IOCTL_TTY_SETMODE 0
 #define IOCTL_TTY_GETMODE 1
-
+#define IOCTL_TTY_SETFGGRP 2
 
 

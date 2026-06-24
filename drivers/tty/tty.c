@@ -1,8 +1,10 @@
 #include <drivers/tty.h>
 #include <kernel/majors.h>
+#include <kernel/proc.h>
 #include <lib/kmalloc.h>
 #include <lib/kprint.h>
 #include <uapi/sys/errno.h>
+#include <uapi/signal.h>
 #include <stddef.h>
 
 //tty driver
@@ -47,13 +49,17 @@ int tty_ioctl(struct device* dev, int cmd, void* arg) {
     switch(cmd) {
         case IOCTL_TTY_SETMODE:
             tty->mode = *((struct termios*) arg);
-            return 0;
+            break;
         case IOCTL_TTY_GETMODE:
             *((struct termios*) arg) = tty->mode;
-            return 0;
+            break;
+        case IOCTL_TTY_SETFGGRP:
+            tty->fg_pgrp = *((pid_t*) arg);
+            break;
         default:
             return -ENOTTY;
     }
+    return 0;
 }
 
 
@@ -77,11 +83,20 @@ static void tty_read(struct tty_device* tty, struct io_request* req)
             }
             write_dev->driver->writeb(write_dev, '\b');
             write_dev->driver->writeb(write_dev, ' ');
-            tty->bytes_copied--;
+
+            ((char*) req->buffer)[--tty->bytes_copied] = ' ';
         }
 
         if (c == '\r') {
+            ((char*) req->buffer)[tty->bytes_copied++] = '\n';
             while(tty_writeb(&tty->base, '\n') == -1);
+            goto end;
+        }
+        if (c == 0x04) { //CTRL+D
+            goto end;
+        }
+        if (c == 0x03) { //CTRL+C
+            proc_kill(tty->fg_pgrp, SIGKILL);
             goto end;
         }
 
@@ -91,10 +106,8 @@ static void tty_read(struct tty_device* tty, struct io_request* req)
         }
         
         
-        int i = tty->bytes_copied;
-        ((uint8_t*) req->buffer)[i] = c;
-        tty->bytes_copied = ++i;
-        if (i > req->count) {
+        ((uint8_t*) req->buffer)[tty->bytes_copied++] = c;
+        if (tty->bytes_copied == req->count) {
             goto end;
         }
     }

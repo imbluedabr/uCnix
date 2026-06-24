@@ -72,7 +72,10 @@ void device_finish_request(struct device* dev, ssize_t bytes_transfered) //finis
     struct io_request* req = device_peek_request(dev);
     req->offset = bytes_transfered;
     req->status = 1;
-    proc_unblock_process(waiter_pop(&req->waiter));
+    struct proc* p = waiter_pop(&req->waiter);
+    if (p) {
+        proc_unblock_process(p);
+    }
     device_dequeue_request(dev);
 }
 

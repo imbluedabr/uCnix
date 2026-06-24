@@ -32,25 +32,21 @@ void kernel_worker_process()
         if ((get_kernel_ticks() - last) > 1000) {
             last = get_kernel_ticks();
             system_blink();
+
         }
         if (current_process->exit_code != 0) {
             proc_stop_scheduling();
-            
-            if (current_process->exit_code == SIGCHLD) {
-
-                struct proc* p = proc_active_list;
-                while(p) {
-                    if (p->state == PROC_ZOMBIE) {
-                        proc_reap(p);
-                        if (p->pid == 1) goto stop;
-                        break;
-                    }
-                    p = p->next;
+            struct proc* p = proc_active_list;
+            while(p) {
+                if (p->state == PROC_ZOMBIE && p->ppid == 0) {
+                    proc_reap(p);
+                    if (p->pid == 1) goto stop;
+                    break;
                 }
+                p = p->next;
             }
             current_process->exit_code = 0;
-            
-            proc_schedule();
+            proc_restart_scheduling();
         }
         device_global_update();
     }
@@ -110,15 +106,17 @@ void kernel_init_process()
     FD_SET(stdout, fd_list);
     FD_SET(stderr, fd_list);
     status = sys_spawn(INIT_PATH, &fd_list, NULL);
-    
+    if (status < 0) goto abort;
+
     //reparent userspace init
     int irq = disable_interrupts();
     struct proc* p = proc_get_process(2);
     if (!p) goto abort;
     p->pid = 1;
     p->ppid = 0;
-    current_process->pid = 2;
+    current_process->pid = proc_pid_alloc();
     current_process->ppid = 0;
+    proc_pid_free(2);
     enable_interrupts(irq);
     proc_free_process(p);
     proc_kill(1, SIGCONT);
@@ -178,14 +176,14 @@ const process_desc_t kernel_init_proc = {
         .reader = MKDEV(USART_MAJOR, 1),
         .writer = MKDEV(USART_MAJOR, 1)
         });
-
+    
     kinfo("init: starting kernel worker\n");
     struct proc* p = proc_create(&kernel_worker_proc);
     p->sigmask = 1 << SIGCHLD;
     kinfo("init: starting kernel init\n");
     p = proc_create(&kernel_init_proc);
     p->sigmask = (1 << SIGCHLD) | (1 << SIGCONT); //enable sigchld signal
-
+    p->credentials.euid = 0;
     proc_start_scheduling();
     while(1);
 }

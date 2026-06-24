@@ -1,4 +1,5 @@
 build
+staging/*
 *.o
 *.elf
 *.bin

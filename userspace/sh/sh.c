@@ -14,63 +14,12 @@
 
 static char path_buff[32];
 
+void builtin_exit(int argc, char** argv) {
+    _exit(0);
+}
+
 void builtin_pwd(int argc, char** argv) {
-    int pos = sizeof(path_buff);
-    path_buff[--pos] = '\0';
-
-    int curr = open(".", O_RDONLY);
-
-    struct stat curr_st, parent_st;
-
-    for (;;) {
-        fstat(curr, &curr_st);
-
-        int parent = openat(curr, "..", O_RDONLY);
-        fstat(parent, &parent_st);
-
-        // reached global root
-        if (curr_st.st_dev == parent_st.st_dev &&
-            curr_st.st_ino == parent_st.st_ino) {
-            close(parent);
-            break;
-        }
-
-        struct dirent d;
-        int found = 0;
-
-        while (readdir(parent, &d, 1) == 1) {
-            int cand = openat(parent, d.d_name, O_RDONLY);
-            struct stat st;
-            fstat(cand, &st);
-            close(cand);
-
-            if (st.st_dev == curr_st.st_dev &&
-                st.st_ino == curr_st.st_ino) {
-                int n = strlen(d.d_name);
-                pos -= n;
-                memcpy(path_buff + pos, d.d_name, n);
-                path_buff[--pos] = '/';
-                found = 1;
-                break;
-            }
-        }
-
-        close(curr);
-        curr = parent;
-
-        if (!found) {
-            puts("pwd: could not find parent\n");
-            // inconsistent FS; bail
-            break;
-        }
-    }
-
-    close(curr);
-
-    if (pos == sizeof(path_buff) - 1)
-        puts("/\n");
-    else
-        printf("%s\n", path_buff + pos);
+    printf("%s\n", getcwd(path_buff, sizeof(path_buff)));
 }
 
 
@@ -87,7 +36,7 @@ void builtin_ls(int argc, char** argv) {
     }
     
     if (dir < 0) {
-        puts("ls: path not found\n");
+        puts("ls: no such file or directory\n");
         return;
     }
 
@@ -103,12 +52,84 @@ void builtin_ls(int argc, char** argv) {
 void builtin_cd(int argc, char** argv) {
     if (argc != 2) {
         puts("cd: invalid argument(s)\n");
-    } else {
-        if (chdir(argv[1]) == -ENOENT) {
-            puts("cd: path not found\n");
-        }
+    }
+    int status = chdir(argv[1]);
+    
+    if (status == -ENOENT) {
+        puts("cd: no such file or directory\n");
+    } else if (status == -ENOTDIR) {
+        puts("cd: not a directory\n");
     }
 }
+
+static char data_buff[256];
+
+void builtin_cat(int argc, char** argv) {
+    int index = 1;
+
+    do {
+        int fd = STDIN_FILENO;
+        if (argc > 1) {
+            fd = open(argv[index++], O_RDONLY);
+        }
+
+        if (fd < 0) {
+            return puts("cat: no such file or directory\n");
+        }
+        int count = 0;
+        while((count = read(fd, &data_buff, sizeof(data_buff))) > 0) {
+            if (count < 0) return puts("cat: read error\n");
+            write(STDOUT_FILENO, data_buff, count);
+            memset(data_buff, 0, sizeof(data_buff));
+        }
+        close(fd);
+    } while(argv[index]);
+}
+
+void builtin_test(int argc, char** argv) {
+    if (argc != 3) return puts("test: invalid argument(s)\n");
+    int dev = open(argv[1], O_RDWR);
+    if (dev < 0) return puts("test: could not open device\n");
+    int file = open(argv[2], O_RDONLY);
+    if (file < 0) {
+        close(dev);
+        return puts("test: could not open file\n");
+    }
+    
+    int c = read(file, data_buff, sizeof(data_buff));
+    if (c < 0) {
+        close(file);
+        close(dev);
+        puts("test: read error\n");
+    }
+    write(dev, data_buff, c);
+    
+    close(file);
+    close(dev);
+}
+
+typedef void (*builtin_t)(int argc, char** argv);
+
+builtin_t builtin_table[6];
+
+void init_builtins() {
+    builtin_table[0] = builtin_exit;
+    builtin_table[1] = builtin_ls;
+    builtin_table[2] = builtin_cd;
+    builtin_table[3] = builtin_pwd;
+    builtin_table[4] = builtin_cat;
+    builtin_table[5] = builtin_test;
+
+}
+
+const char builtin_names[][5] = {
+    "exit",
+    "ls",
+    "cd",
+    "pwd",
+    "cat",
+    "test"
+};
 
 int spawn_command(const char* path, char** argv) {
     fd_set fds;
@@ -130,7 +151,10 @@ void execute_command(char* buffer)
     
     int argc = 0;
     char* current_word = buffer;
-    while(*buffer) {
+    while(*buffer) { //handle endline character
+        if (*buffer == '\n') {
+            *buffer = '\0';
+        }
         if (*buffer == ' ') {
             *buffer = '\0';
             arg_vec[argc++] = current_word;
@@ -144,28 +168,26 @@ void execute_command(char* buffer)
     
     if (argc == 0) return;
     
-    if (strcmp(arg_vec[0], "exit") == 0) {
-        _exit(0);
-    } else if (strcmp(arg_vec[0], "ls") == 0) {
-        builtin_ls(argc, arg_vec);
-    } else if (strcmp(arg_vec[0], "cd") == 0) {
-        builtin_cd(argc, arg_vec);
-    } else if (strcmp(arg_vec[0], "pwd") == 0) {
-        builtin_pwd(argc, arg_vec);
-    } else {
-        snprintf(path_buff, sizeof(path_buff), "/bin/%s", arg_vec[0]);
-        int wstatus = spawn_command(path_buff, arg_vec);
-        if (wstatus > -1) {
-            printf("exit: %d\n", wstatus);
+    for (int i = 0; i < 6; i++) {
+        if (strcmp(arg_vec[0], builtin_names[i]) == 0) {
+            builtin_table[i](argc, arg_vec);
             return;
         }
-        wstatus = spawn_command(arg_vec[0], arg_vec);
-        if (wstatus > -1) {
-            printf("exit: %d\n", wstatus);
-            return;
-        }
-        printf("sh: %s: command not found\n", arg_vec[0]);
     }
+
+    memset(path_buff, 0, sizeof(path_buff));
+    snprintf(path_buff, sizeof(path_buff), "/bin/%s", arg_vec[0]);
+    int wstatus = spawn_command(path_buff, arg_vec);
+    if (wstatus > -1) {
+        printf("exit: %d\n", wstatus);
+        return;
+    }
+    wstatus = spawn_command(arg_vec[0], arg_vec);
+    if (wstatus > -1) {
+        printf("exit: %d\n", wstatus);
+        return;
+    }
+    printf("sh: %s: command not found\n", arg_vec[0]);
 }
 
 int main(int argc, char** argv)
@@ -175,6 +197,7 @@ int main(int argc, char** argv)
     printf("uname: %s %s %s %s %s\n", ubuff.sysname, ubuff.nodename, ubuff.release, ubuff.version, ubuff.machine);
 
     static char cmd_buff[32];
+    init_builtins();
     while (1) {
         puts("# ");
         memset(cmd_buff, 0, 32);

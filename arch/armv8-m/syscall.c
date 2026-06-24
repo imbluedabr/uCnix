@@ -170,6 +170,16 @@ static void s_kill(struct exception_frame* f)
     f->caller_regs[0] = sys_kill(f->caller_regs[0], f->caller_regs[1]);
 }
 
+static void s_setpgrp(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_setpgrp(f->caller_regs[0], f->caller_regs[1]);
+}
+
+static void s_getpgrp(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_getpgrp(f->caller_regs[0]);
+}
+
 static void s_sigprocmask(struct exception_frame* f)
 {
     f->caller_regs[0] = sys_sigprocmask(f->caller_regs[0], (const sigset_t*) f->caller_regs[1], (sigset_t*) f->caller_regs[2]);
@@ -218,6 +228,8 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_WAITPID] = s_waitpid,
     [SYS_KILL] = s_kill,
     [SYS_SIGPROCMASK] = s_sigprocmask,
+    [SYS_SETPGRP] = s_setpgrp,
+    [SYS_GETPGRP] = s_getpgrp,
 
     [SYS_SYSCTL] = s_sysctl,
     [SYS_UNAME] = s_uname

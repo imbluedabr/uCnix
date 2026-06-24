@@ -40,6 +40,8 @@ __attribute__((optimize("O2"))) struct proc* proc_create(process_desc_t* descrip
         p->control.w = CONTROL_SPSEL_Msk | CONTROL_nPRIV_Msk;
         
         uint8_t* kstack = (uint8_t*) proc_stack_alloc();
+        if (!kstack) thread_panic("No available kernel stack\n");
+
         p->save_psp = kstack + PROC_KSTACK_SIZE;
         p->save_splim = kstack;
         p->save_control.w = CONTROL_SPSEL_Msk;
@@ -118,6 +120,16 @@ void proc_mark_zombie(struct proc* p, int exit_code)
         waiter_remove(p->waiting_on, p);
     }
     __disable_irq();
+    
+    //reparent all the children to pid 1
+    struct proc* curr = proc_active_list;
+    while(curr) {
+        if (curr->ppid == p->pid) {
+            curr->ppid = 1;
+        }
+        curr = curr->next;
+    }
+
     p->exit_code = exit_code;
     p->state = PROC_ZOMBIE;
     __enable_irq();

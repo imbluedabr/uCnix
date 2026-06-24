@@ -262,7 +262,7 @@ static struct inode* vfs_walk_rel(struct inode* base, const char* path, int mode
     int path_idx = 0;
     char path_cpy[FS_PATH_LEN+1];
     char* current_word = path_cpy;
-
+    
     if (!base) {
         thread_panic("vfs: cwd not set!");
     }
@@ -271,14 +271,14 @@ static struct inode* vfs_walk_rel(struct inode* base, const char* path, int mode
     while (path[path_idx]) {
         if (path[path_idx] == '/') {
             path_cpy[path_idx] = '\0';
-            
-            ino_t ino = vfs_read_dentry(base, current_word);
-            if (ino < 0) goto error;
-            struct inode* next = vfs_read_inode(base->fs, ino);
-            if (!next) goto error;
-            inode_free(base);
-            base = check_mount(next);
-            
+            if (*current_word != '\0') {
+                ino_t ino = vfs_read_dentry(base, current_word);
+                if (ino < 0) goto error;
+                struct inode* next = vfs_read_inode(base->fs, ino);
+                if (!next) goto error;
+                inode_free(base);
+                base = check_mount(next);
+            }
             current_word = path_cpy + path_idx + 1;
         }
         path_idx++;
@@ -496,6 +496,7 @@ int vfs_ftruncate(int fd, off_t lenght)
 int vfs_fchdir(int fd)
 {
     struct file* newcwd = proc_fd_get(current_process, fd);
+    if (FS_GET_FTYPE(newcwd->i->perm) != S_IFDIR) return -ENOTDIR;
     inode_free(current_process->cwd);
     mutex_lock(&vfs_cache_lock);
     newcwd->i->refcount++;

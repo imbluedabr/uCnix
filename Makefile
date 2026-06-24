@@ -138,11 +138,10 @@ $(BUILD)/%.o: %.S
 	$(CC) $(ASFLAGS) -c $< -o $@
 
 userspace:
-	$(MAKE) -C $(ROOT)/userspace/libc all
-	$(MAKE) -C $(ROOT)/userspace/sh all
+	$(MAKE) -C $(ROOT)/userspace all
 
 rootfs.bin: userspace
-	$(ROOT)/tools/mkfs.elf $(ROOT)/staging
+	$(ROOT)/tools/mkfs.elf -c $(ROOT)/staging rootfs.bin
 
 rootfs.o: rootfs.bin
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm rootfs.bin rootfs.o
@@ -162,6 +161,6 @@ dump:
 	$(TOOLCHAIN)-objdump -S -d -M no-aliases $(MN_FILE) >> verbose_dump.s.dump
 
 clean:
-	rm -r $(BUILD) rootfs.o
-
+	rm -rf $(BUILD) rootfs.o *.bin
+	$(MAKE) -C $(ROOT)/userspace clean
 

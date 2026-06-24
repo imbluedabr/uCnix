@@ -61,8 +61,59 @@ int chown(const char* path, uid_t owner, gid_t group) {
 }
 
 char* getcwd(char* buf, size_t size) {
-    
-    return NULL;
+    int pos = size;
+    buf[--pos] = '\0';
+
+    int curr = open(".", O_RDONLY);
+
+    struct stat curr_st, parent_st;
+
+    for (;;) {
+        fstat(curr, &curr_st);
+
+        int parent = openat(curr, "..", O_RDONLY);
+        fstat(parent, &parent_st);
+
+        // reached global root
+        if (curr_st.st_ino == parent_st.st_ino) {
+            close(parent);
+            break;
+        }
+
+        struct dirent d;
+        int found = 0;
+
+        while (readdir(parent, &d, 1) == 1) {
+            int cand = openat(parent, d.d_name, O_RDONLY);
+            struct stat st;
+            fstat(cand, &st); // we have to fsat it because the ino reported by readdir is the underlying ".." when you are at the root of a filesystem
+            close(cand);
+
+            if (st.st_ino == curr_st.st_ino) {
+                int n = strlen(d.d_name);
+                pos -= n;
+                memcpy(buf + pos, d.d_name, n);
+                buf[--pos] = '/';
+                found = 1;
+                break;
+            }
+        }
+
+        close(curr);
+        curr = parent;
+
+        if (!found) {
+            return NULL;
+        }
+    }
+
+    close(curr);
+
+    if (pos == size - 1) {
+        strlcpy(buf, "/", 1);
+        return buf;
+    }
+    return buf + pos;
 }
 
 [[gnu::naked]] void sync(void) {

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
 #include <sys/stat.h>
@@ -74,6 +75,23 @@ void disk_init()
     
     int total_blocks = (disk.inode_table_size/disk.block_size) + disk.block_count + 1;
     fs_buffer = calloc(total_blocks, disk.block_size);
+}
+
+void disk_load(const char* file)
+{
+    int img = open(file, O_RDONLY);
+    if (img == -1) {
+        printf("mkfs: no such file or directory\n");
+        return;
+    }
+    
+    lseek(img, 512, SEEK_SET);
+    read(img, &disk, sizeof(struct ucfs_superblock));
+    printf("disk parameters:\n\tinode_table_size: %d\n\tblock_size: %d\n\tblock_count: %d\n\tblock_used: %d\n", disk.inode_table_size, disk.block_size, disk.block_count, disk.block_used);
+    int total_blocks = (disk.inode_table_size/disk.block_size) + disk.block_count + 1;
+    fs_buffer = calloc(total_blocks, disk.block_size);
+    lseek(img, 0, SEEK_SET);
+    read(img, fs_buffer, total_blocks*disk.block_size);
 }
 
 void disk_sync()
@@ -150,7 +168,7 @@ void ucfs_initdir(struct ucfs_file* dir)
 {
     struct ucfs_inode* i = inode_read(dir->ino);
     struct ucfs_file* entries = (struct ucfs_file*)(CALC_BADDR(i->indirect_block));
-
+    i->size = disk.block_size;
     for (int i = 0; i < 42; i++) {
         entries[i].ino = 255;
     }
@@ -163,6 +181,7 @@ void ucfs_mkroot(struct ucfs_file* root)
     i->indirect_block = block_alloc();
     i->nlinks = 1;
     i->perm.mode = FS_IFDIR | FS_IRUSR | FS_IXUSR;
+    i->mtime = 0;
 
     root->ino = ino;
 
@@ -207,10 +226,17 @@ void ucfs_listdir(struct ucfs_file* file, int depth)
     for (int i = 0; i < 42; i++) {
         if (entries[i].ino != 255) {
             struct ucfs_inode* f = inode_read(entries[i].ino);
-            printf("%*s%o\t%d\t%d\t%d\t%d\t%d\t%s\n", depth*4, "",f->perm.mode, f->nlinks, f->perm.group, f->perm.user, f->size, f->mtime, entries[i].name);
+            char timebuff[32] = {0};
+            struct tm ts;
+            time_t time = f->mtime;
+            localtime_r(&time, &ts);
+            strftime(timebuff, sizeof(timebuff), "%a %b %d %Y", &ts);
+            printf("%*s%o %d\t%d:%d\t%d\t%s\t%s %d\n", depth*8, "",f->perm.mode, f->nlinks, f->perm.group, f->perm.user, f->size, timebuff, entries[i].name, entries[i].ino);
             if (f->perm.mode & FS_IFDIR) {
                 if (strcmp(entries[i].name, "..") == 0 || strcmp(entries[i].name, ".") == 0) continue;
+                printf("%*s\\-> %s\n", depth*8, "", entries[i].name);
                 ucfs_listdir(&entries[i], depth + 1);
+                printf("\n");
             }
         }
     }
@@ -223,11 +249,11 @@ void generate_fs(const char* path, struct ucfs_file* root_dir, int parent_ino)
 
     dir = opendir(path);
     struct ucfs_file* current_dir = root_dir;
+
+    ucfs_mklink(current_dir, parent_ino, ".."); //create .. link
+
     while ((entry = readdir(dir)) != NULL) {
-        if (strcmp(entry->d_name, "..") == 0) {
-            ucfs_mklink(current_dir, parent_ino, "..");
-            continue;
-        }
+        if (strcmp(entry->d_name, "..") == 0) continue;
         if (strcmp(entry->d_name, ".") == 0) continue;
 
         char new_path[1024];
@@ -254,11 +280,12 @@ void generate_fs(const char* path, struct ucfs_file* root_dir, int parent_ino)
             fstat(fd, &st);
             uint8_t* buffer = malloc(st.st_size);
             read(fd, buffer, st.st_size);
-            close (fd);
+            close(fd);
             ucfs_writefile(new_file, buffer, st.st_size);
             free(buffer);
         }
     }
+
     closedir(dir);
 }
 
@@ -266,22 +293,50 @@ void generate_fs(const char* path, struct ucfs_file* root_dir, int parent_ino)
 struct ucfs_file root;
 int main(int argc, char** argv)
 {
-    if (argc != 2) {
-        printf("usage: mkfs [FILE]\n");
+    int mode = -1;
+    const char* target = NULL;
+    const char* dest = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        char* arg = argv[i];
+        if (strcmp(arg, "-c") == 0) { //create file system
+            mode = 0;
+        } else if (strcmp(arg, "-e") == 0) { //examine file system
+            mode = 1;
+        } else if (mode == 0 && !target) {
+            target = arg;
+        } else if (!dest) {
+            dest = arg;
+        } else {
+            printf("mkfs: USAGE: mkfs [-ce] [TARGET] DEST\n");
+            return -1;
+        }
+    }
+    if (!dest) {
+        printf("mkfs: no destination file specified\n");
         return -1;
     }
-    disk_init();
-    ucfs_mkroot(&root);
+    if (mode == 0 && !target) {
+        printf("mkfs: no taget directory specified\n");
+        return -1;
+    }
 
-    generate_fs(argv[1], &root, root.ino);
+    if (mode == 0) {
+        disk_init();
+        ucfs_mkroot(&root);
+        
+        generate_fs(target, &root, root.ino);
     
+        disk_sync();
+        int imgfd = open(dest, O_CREAT | O_RDWR, S_IFREG | S_IRUSR | S_IWUSR );
+        write(imgfd, fs_buffer, (disk.block_count + 2)*disk.block_size + disk.inode_table_size);
+        close(imgfd);
+    } else {
+        disk_load(dest);
+    }
+
     ucfs_listdir(&root, 0);
-    disk_sync();
-    int imgfd = open("rootfs.bin", O_CREAT | O_RDWR, S_IFREG | S_IRUSR | S_IWUSR );
 
-    write(imgfd, fs_buffer, (disk.block_count + 2)*disk.block_size);
-    
-    close(imgfd);
     return 0;
 }
 

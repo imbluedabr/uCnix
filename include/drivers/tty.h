@@ -14,7 +14,8 @@ struct tty_device {
     struct device* writer;
     struct termios mode;
     uint16_t bytes_copied;
-    uint16_t status_flags;
+    uint8_t status_flags;
+    uint8_t fg_pgrp;
 };
 
 #define TTY_S_NL (1 << 0)
