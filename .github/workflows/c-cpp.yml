@@ -22,8 +22,6 @@ jobs:
     - name: Build tools
       run: make tools
     
-    - name: Make rootfs
-      run: tools/mkfs.elf ./staging
     - name: Build image
       run: make image
 
