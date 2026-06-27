@@ -170,6 +170,11 @@ static void s_kill(struct exception_frame* f)
     f->caller_regs[0] = sys_kill(f->caller_regs[0], f->caller_regs[1]);
 }
 
+static void s_sigprocmask(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_sigprocmask(f->caller_regs[0], (const sigset_t*) f->caller_regs[1], (sigset_t*) f->caller_regs[2]);
+}
+
 static void s_setpgrp(struct exception_frame* f)
 {
     f->caller_regs[0] = sys_setpgrp(f->caller_regs[0], f->caller_regs[1]);
@@ -180,9 +185,19 @@ static void s_getpgrp(struct exception_frame* f)
     f->caller_regs[0] = sys_getpgrp(f->caller_regs[0]);
 }
 
-static void s_sigprocmask(struct exception_frame* f)
+static void s_setreuid(struct exception_frame* f)
 {
-    f->caller_regs[0] = sys_sigprocmask(f->caller_regs[0], (const sigset_t*) f->caller_regs[1], (sigset_t*) f->caller_regs[2]);
+    f->caller_regs[0] = sys_setreuid(f->caller_regs[0], f->caller_regs[1], f->caller_regs[2]);
+}
+
+static void s_setregid(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_setregid(f->caller_regs[0], f->caller_regs[1], f->caller_regs[2]);
+}
+
+static void s_setgroups(struct exception_frame* f)
+{
+    f->caller_regs[0] = sys_setgroups(f->caller_regs[0], f->caller_regs[1], (const gid_t*) f->caller_regs[2]);
 }
 
 static void s_sysctl(struct exception_frame* f)
@@ -231,6 +246,10 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_SETPGRP] = s_setpgrp,
     [SYS_GETPGRP] = s_getpgrp,
 
+    [SYS_SETREUID] = s_setreuid,
+    [SYS_SETREGID] = s_setregid,
+    [SYS_SETGROUPS] = s_setgroups,
+
     [SYS_SYSCTL] = s_sysctl,
     [SYS_UNAME] = s_uname
 };
@@ -260,6 +279,10 @@ void syscall_thread_main()
         frame->base_frame.caller_regs[0] = -ENOSYS;
     } else {
         func(&frame->base_frame);
+    }
+    if (current_process->kill_pending) {
+        current_process->kill_pending = 0;
+        proc_mark_zombie(current_process, current_process->exit_code);
     }
 }
 

@@ -44,7 +44,7 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set* fd_list,
         return count;
     }
 
-    kdbg("exec: magic=%s, arch=%d, break=0x%x, stack=%d, entry=0x%x\n", header.magic, header.arch, header.program_break, header.stack_size, header.entry_point);
+    kdbg("exec: magic=%s, arch=%d, break=0x%x, stack=%d, entry=0x%x, rel_start=0x%x, rel_end=0x%x\n", header.magic, header.arch, header.program_break, header.stack_size, header.entry_point, header.rel_start, header.rel_end);
     
     if (strncmp(header.magic, TINY_EXEC_MAGIC, 4) != 0) goto fmt_error;
     if (header.arch != ARMV8_M_MAIN) goto fmt_error;
@@ -56,13 +56,26 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set* fd_list,
         return -ENOMEM;
     }
 
-    kdbg("base=0x%x\n", (uint32_t) program_base);
     
     vfs_lseek(fd, 0, 0);
     count = vfs_read(fd, program_base, header.program_break);
-    kdbg("bytes_loaded=%d\n", count);
     vfs_close(fd);
-        
+    
+    elf_rel_t* rel = (elf_rel_t*) (program_base + header.rel_start);
+    int rel_size = (header.rel_end - header.rel_start)/sizeof(elf_rel_t);
+    kdbg("rel: rel_base=0x%x, rel_size=%d\n", program_base, rel_size);
+    for (int i = 0; i < rel_size; i++) {
+        elf_rel_t* curr = &rel[i];
+        uint32_t* addend = (uint32_t*) (program_base + curr->r_offset);
+        kdbg("rel: offset=0x%x, info=%x, addend=0x%x\n", curr->r_offset, curr->r_info, *addend);
+        if (curr->r_info == R_ARM_RELATIVE) {
+            *addend += (uint32_t) program_base; //relocate
+        } else {
+            kerr("rel: unknown relocation type\n");
+        }
+    }
+    
+
     //pushing argv to the user stack
     uint8_t* user_stack = program_base + (header.program_break - header.stack_size);
     
@@ -129,6 +142,52 @@ pid_t sys_getpdid(int type)
 {
     if (type == 0) return current_process->pid;
     if (type == 1) return current_process->ppid;
+    if (type == 2) return current_process->credentials.euid;
+    if (type == 3) return current_process->credentials.ruid;
+    if (type == 4) return current_process->credentials.egid;
+    if (type == 5) return current_process->credentials.rgid;
+    return 0;
+}
+
+int sys_setreuid(pid_t target, uid_t ruid, uid_t euid)
+{
+    if (current_process->credentials.euid != 0) return -EPERM;
+    if (target == 0) target = current_process->pid;
+    struct proc* p = proc_get_process(target);
+    
+    if (ruid > -1) p->credentials.ruid = ruid;
+    if (euid > -1) p->credentials.euid = euid;
+    return 0;
+}
+
+int sys_setregid(pid_t target, gid_t rgid, gid_t egid)
+{
+    if (current_process->credentials.euid != 0) return -EPERM;
+    if (target == 0) target = current_process->pid;
+    struct proc* p = proc_get_process(target);
+    if (!p) return -ESRCH;
+
+    if (rgid > -1) p->credentials.ruid = rgid;
+    if (egid > -1) p->credentials.euid = egid;
+    return 0;
+}
+
+int sys_setgroups(pid_t target, int size, const gid_t* list)
+{
+    if (current_process->credentials.euid != 0) return -EPERM;
+    if (target == 0) target = current_process->pid;
+    struct proc* p = proc_get_process(target);
+    if (!p) return -ESRCH;
+    
+    p->credentials.group_count = 0;
+    if (list) {
+        int i = 0;
+        for (; i < size; i++) {
+            if (i >= MAX_GROUPS) break;
+            p->credentials.groups[i] = list[i];
+        }
+        p->credentials.group_count = i;
+    }
     return 0;
 }
 
@@ -136,18 +195,23 @@ int sys_setpgrp(pid_t pid, pid_t pgid)
 {
     if (pgid < 0) return -EINVAL;
     if (pid == 0) pid = current_process->pid;
+    mutex_lock(&proc_acces_lock);
     struct proc* p = proc_get_process(pid);
-    if (!p) return -ESRCH;
+    if (!p) {
+        mutex_unlock(&proc_acces_lock);
+        return -ESRCH;
+    }
+
     if (pgid == 0) pgid = p->pid;
 
     cred_t cred = p->credentials;
     if (!check_owner(cred)) {
-        proc_free_process(p);
+        mutex_unlock(&proc_acces_lock);
         return -EPERM;
     }
     
     p->pgrp = pgid;
-    proc_free_process(p);
+    mutex_unlock(&proc_acces_lock);
     return 0;
 }
 
@@ -156,21 +220,24 @@ pid_t sys_getpgrp(pid_t pid)
     if (pid == 0) pid = current_process->pid;
     struct proc* p = proc_get_process(pid);
     if (!p) return -ESRCH;
-    pid_t pgrp = p->pgrp;
-    proc_free_process(p);
-    return pgrp;
+    return p->pgrp;
 }
 
 int sys_kill(pid_t pid, int sig)
 {
+    mutex_lock(&proc_acces_lock);
     struct proc* p = proc_get_process(pid);
-    if (!p) return -ESRCH;
+    if (!p) {
+        mutex_unlock(&proc_acces_lock);
+        return -ESRCH;
+    }
     
-    if (check_owner(p->credentials)) {
-        proc_free_process(p);
+    int owner = check_owner(p->credentials);
+    mutex_unlock(&proc_acces_lock);
+    if (owner) {
         return proc_kill(pid, sig);
     }
-    proc_free_process(p);
+    
     return -EPERM;
 }
 
@@ -197,11 +264,7 @@ int sys_sigprocmask(int how, const sigset_t* set, sigset_t* oldset)
 
 void sys_exit(int return_code)
 {
-    proc_stop_scheduling();
-    proc_mark_zombie(current_process, return_code);
-    proc_kill(current_process->ppid, SIGCHLD);
-
-    proc_schedule(); //in case proc_kill doesnt trigger the scheduler
+    proc_kill_process(current_process, return_code);
 }
 
 pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
@@ -216,8 +279,9 @@ pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
             child_count++;
             pid_t p_pid = p->pid;
             if (p->state == PROC_ZOMBIE && (p_pid == pid || pid == -1)) {
-                mutex_unlock(&proc_acces_lock);
                 int exit_code = proc_reap(p);
+                mutex_unlock(&proc_acces_lock);
+
                 if (wstatus) *wstatus = exit_code;
                 current_process->exit_code = 0; //clear signal
                 return p_pid;
@@ -243,8 +307,9 @@ pid_t sys_waitpid(pid_t pid, int* wstatus, int options)
         if (p->ppid == current_process->pid) {
             pid_t p_pid = p->pid;
             if (p->state == PROC_ZOMBIE && (p_pid == pid || pid == -1)) {
-                mutex_unlock(&proc_acces_lock);
                 int exit_code = proc_reap(p);
+                mutex_unlock(&proc_acces_lock);
+
                 if (wstatus) *wstatus = exit_code;
                 return p_pid;
             }

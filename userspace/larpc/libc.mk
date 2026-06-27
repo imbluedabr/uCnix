@@ -4,6 +4,6 @@ LDFLAGS = -nostartfiles -nostdlib -T$(LIBC)/libc.ld $(LIBC)/*.o
 $(info TOOLCHAIN="$(TOOLCHAIN)")
 ifeq ("$(TOOLCHAIN)", "arm-none-eabi")
 CFLAGS += -ffreestanding -Wall -mthumb -mcpu=cortex-m33+nodsp -mfloat-abi=soft -fpie
-LDFLAGS += -static-pie -mthumb -mcpu=cortex-m33+nodsp
+LDFLAGS += -pie -mthumb -mcpu=cortex-m33+nodsp
 endif
 

@@ -128,7 +128,7 @@ int devfs_mknod(struct filesystem* fs, const char* name, struct permissions perm
     for (int i = 0; i < 16; i++) {
         struct devfs_file* f = &devfs->files[i];
         if (f->devno == 255) {
-            kinfo("devfs: creating handle (%s) with acces mode 0x%x\n", name, perm.mode);
+            kinfo("devfs: creating handle (%s) with acces mode 0%o\n", name, perm.mode);
             f->perm = perm;
             f->devno = devno;
             strlcpy(f->name, name, FS_INAME_LEN);
@@ -174,6 +174,7 @@ struct inode* devfs_read_i(struct filesystem* fs, ino_t ino) //read an inode
     
     if (index == 255) {
         newi->perm.mode = 020755;
+        newi->size = sizeof(devfs->files);
     } else if (index < 16) {
         struct devfs_file* f = &devfs->files[index];
         if (f->devno == 255) goto error;

@@ -2,6 +2,7 @@
 #include <sys/fcntl.h>
 #include <sys/errno.h>
 #include <unistd.h>
+#include <syscalls.h>
 #include "svcall.h"
 
 int stat(const char* pathname, struct stat* statbuf) {
@@ -13,18 +14,18 @@ int stat(const char* pathname, struct stat* statbuf) {
 }
 
 [[gnu::naked]] int fstat(int fd, struct stat* statbuf) {
-    SVCALL(4);
+    SVCALL(SYS_FSTAT);
 }
 
 [[gnu::naked]] int mkdir(const char* pathname, mode_t mode) {
-    SVCALL(11);
+    SVCALL(SYS_MKDIR);
 }
 
 [[gnu::naked]] int mknod(const char* pathname, mode_t mode, dev_t dev) {
-    SVCALL(17);
+    SVCALL(SYS_MKNOD);
 }
 
 [[gnu::naked]] mode_t umask(mode_t mask) {
-    SVCALL(21);
+    SVCALL(SYS_UMASK);
 }
 

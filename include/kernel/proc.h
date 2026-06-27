@@ -13,12 +13,15 @@ typedef enum : uint8_t {
     PROC_READY
 } process_state_e;
 
+#define MAX_GROUPS 3
+
 typedef struct {
-    gid_t rgid;
-    gid_t egid;
-    uid_t ruid;
-    uid_t euid;
-    gid_t groups[4];
+    uint8_t rgid;
+    uint8_t egid;
+    uint8_t ruid;
+    uint8_t euid;
+    uint8_t groups[3];
+    uint8_t group_count;
 } cred_t;
 
 struct proc {
@@ -32,8 +35,7 @@ struct proc {
     uint8_t* save_splim;
 #endif
     uint8_t kernel_mode; //0 = user mode, 1 = kernel mode
-    uint8_t crit_section;
-    uint8_t refcount;
+    uint8_t kill_pending;
 
     uint8_t* program_base;
     int program_size;
@@ -95,14 +97,15 @@ struct proc* proc_alloc_process();
 int proc_fd_add(struct proc* p, struct file* f);
 int proc_fd_set(struct proc* p, int fd, struct file* f);
 
+void proc_kill_process(struct proc* p, int exit_code); 
 int proc_kill(pid_t pid, int sig); //send a signal to a process
 int proc_reap(struct proc* p);
 
 void proc_sched_init();
 struct proc* proc_create(process_desc_t* descriptor);
-void proc_mark_zombie(struct proc* p, int exit_code);
 void proc_unblock_process(struct proc* p); //unblock a process
 void proc_block(struct proc* p); //block a process
+void proc_mark_zombie(struct proc* p, int exit_code);
 void proc_schedule(); //trigger the scheduler
 //starts the scheduler and never returns
 void proc_start_scheduling();

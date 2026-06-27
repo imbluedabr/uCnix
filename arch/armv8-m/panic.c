@@ -72,7 +72,7 @@ void panic_handler(uint32_t pc)
     if (SCB->HFSR & (1 << 30)) { //check if the FORCED bit is set
         kputs("While processing an exception another exception occured.\n");
     }
-    kprintf("\nproc: PID=%d, PPID=%d, PSP=0x%x, PC=0x%x\n\n",p->pid, p->ppid, p->psp, pc);
+    kprintf("\nproc: PID=%d, PPID=%d, PSP=0x%x, PC=0x%x, KMODE=%d\n\n",p->pid, p->ppid, p->psp, pc, p->kernel_mode);
 
     union CFSR cfsr;
     cfsr.raw = SCB->CFSR;

@@ -1,91 +1,86 @@
 #pragma once
 
-typedef enum {
     // filesystem api
-    SYS_READ = 0,
-    SYS_WRITE = 1,
-    SYS_OPEN = 2,
-    SYS_CLOSE = 3,
-    SYS_FSTAT = 4,
-    SYS_LSEEK = 5,
-    SYS_IOCTL = 6,
-    SYS_ACCESS = 7,
-    SYS_SELECT = 8,
-    SYS_FCNTL = 9,
-    //SYS_FLOCK,
-    //SYS_FSYNC,
+#define SYS_READ 0
+#define SYS_WRITE 1
+#define SYS_OPEN 2
+#define SYS_CLOSE 3
+#define SYS_FSTAT 4
+#define SYS_LSEEK 5
+#define SYS_IOCTL 6
+#define SYS_ACCESS 7
+#define SYS_SELECT 8
+#define SYS_FCNTL 9
     //SYS_FTRUNCATE,
-    SYS_FCHDIR = 10,
-    SYS_MKDIR = 11,
-    SYS_RMDIR = 12,
-    SYS_READDIR = 13,
-    //SYS_CHROOT,
-    SYS_OPENAT = 14,
-    SYS_LINK = 15,
-    SYS_UNLINK = 16,
+#define SYS_FCHDIR 10
+#define SYS_MKDIR 11
+#define SYS_RMDIR 12
+#define SYS_READDIR 13
+#define SYS_OPENAT 14
+#define SYS_LINK 15
+#define SYS_UNLINK 16
     //SYS_SYMLINK,
     //SYS_READLINK,
-    SYS_MKNOD = 17,
-    SYS_FSTATFS = 18,
-    SYS_FCHMOD = 19,
-    SYS_FCHOWN = 20,
-    SYS_UMASK = 21,
-    SYS_SYNC = 22,
-    SYS_MOUNT = 23,
-    SYS_UMOUNT = 24,
+#define SYS_MKNOD 17
+#define SYS_FSTATFS 18
+#define SYS_FCHMOD 19
+#define SYS_FCHOWN 20
+#define SYS_UMASK 21
+#define SYS_SYNC 22
+#define SYS_MOUNT 23
+#define SYS_UMOUNT 24
 
     // network api
-    SYS_SOCKET = 25,
-    SYS_CONNECT = 26,
-    SYS_ACCEPT = 27,
-    SYS_SEND = 28,
-    SYS_RECV = 29,
-    SYS_SHUTDOWN = 30,
-    SYS_BIND = 31,
-    SYS_LISTEN = 32,
-    SYS_GETSOCKNAME = 33,
-    SYS_GETPEERNAME = 34,
-    SYS_GETSOCKOPT = 35,
-    SYS_SETSOCKOPT = 36,
-    SYS_SETHOSTNAME = 37,
+#define SYS_SOCKET 25
+#define SYS_CONNECT 26
+#define SYS_ACCEPT 27
+#define SYS_SEND 28
+#define SYS_RECV 29
+#define SYS_SHUTDOWN 30
+#define SYS_BIND 31
+#define SYS_LISTEN 32
+#define SYS_GETSOCKNAME 33
+#define SYS_GETPEERNAME 34
+#define SYS_GETSOCKOPT 35
+#define SYS_SETSOCKOPT 36
+#define SYS_SETHOSTNAME 37
 
     // process api
-    SYS_SBRK = 38,
-    SYS_GETPDID = 39,
-    SYS_SPAWN = 40,
-    SYS_EXIT = 41,
-    SYS_WAITPID = 42,
-    SYS_KILL = 43,
-    SYS_SIGPROCMASK = 44,
-    SYS_PTRACE = 45,
-    SYS_GETRLIMIT = 46,
-    SYS_GETRUSAGE= 47,
-    SYS_SETPGRP = 48,
-    SYS_GETPGRP = 49,
+#define SYS_SBRK 38
+#define SYS_GETPDID 39
+#define SYS_SPAWN 40
+#define SYS_EXIT 41
+#define SYS_WAITPID 42
+#define SYS_KILL 43
+#define SYS_SIGPROCMASK 44
+#define SYS_PTRACE 45
+#define SYS_GETRLIMIT 46
+#define SYS_GETRUSAGE 47
+#define SYS_SETPGRP 48
+#define SYS_GETPGRP 49
 
     // timer api
-    SYS_GETITIMER = 50,
-    SYS_SETITIMER = 51,
-    SYS_GETTIMEOFDAY = 52,
-    SYS_SETTIMEOFDAY = 53,
-    SYS_UTIMES = 54,
+#define SYS_GETITIMER 50
+#define SYS_SETITIMER 51
+#define SYS_GETTIMEOFDAY 52
+#define SYS_SETTIMEOFDAY 53
+#define SYS_UTIMES 54
 
     // user/group api
-    SYS_GETREUID = 55,
-    SYS_GETREGID = 56,
-    SYS_SETREUID = 57,
-    SYS_SETREGID = 58,
-    SYS_GETGROUPS = 59,
-    SYS_SETGROUPS = 60,
+//#define SYS_GETREUID 55
+//#define SYS_GETREGID 56
+#define SYS_SETREUID 57
+#define SYS_SETREGID 58
+#define SYS_GETGROUPS 59
+#define SYS_SETGROUPS 60
 
     // misc api
-    SYS_SYSCTL = 61,
-    SYS_UNAME = 62,
-    SYS_REBOOT,
-    SYS_PIPE,
+#define SYS_SYSCTL 61
+#define SYS_UNAME 62
+#define SYS_REBOOT 63
+#define SYS_PIPE 64
 
-    SYSCALL_COUNT
-} syscall_e;
+#define SYSCALL_COUNT 65
 
 
 

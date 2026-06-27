@@ -2,31 +2,32 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <sys/dir.h>
+#include <syscalls.h>
 #include "svcall.h"
 #include "string.h"
 
 [[gnu::naked]] ssize_t read(int fd, void* buf, size_t count) {
-    SVCALL(0);
+    SVCALL(SYS_READ);
 }
 
 [[gnu::naked]] ssize_t write(int fd, const void* buffer, size_t count) {
-    SVCALL(1);
+    SVCALL(SYS_WRITE);
 }
 
 [[gnu::naked]] int close(int fd) {
-    SVCALL(3);
+    SVCALL(SYS_CLOSE);
 }
 
 [[gnu::naked]] off_t lseek(int fd, off_t offset, int whence) {
-    SVCALL(5);
+    SVCALL(SYS_LSEEK);
 }
 
 [[gnu::naked]] int access(const char* pathname, int mode) {
-    SVCALL(7);
+    SVCALL(SYS_ACCESS);
 }
 
 [[gnu::naked]] int fchdir(int fd) {
-    SVCALL(10);
+    SVCALL(SYS_FCHDIR);
 }
 
 int chdir(const char* path) {
@@ -38,19 +39,19 @@ int chdir(const char* path) {
 }
 
 [[gnu::naked]] int rmdir(const char* pathname) {
-    SVCALL(12);
+    SVCALL(SYS_RMDIR);
 }
 
 [[gnu::naked]] int link(const char* oldpath, const char* newpath) {
-    SVCALL(15);
+    SVCALL(SYS_LINK);
 }
 
 [[gnu::naked]] int unlink(const char* pathname) {
-    SVCALL(16);
+    SVCALL(SYS_UNLINK);
 }
 
 [[gnu::naked]] int fchown(int fd, uid_t owner, gid_t group) {
-    SVCALL(20);
+    SVCALL(SYS_FCHOWN);
 }
 
 int chown(const char* path, uid_t owner, gid_t group) {
@@ -117,16 +118,16 @@ char* getcwd(char* buf, size_t size) {
 }
 
 [[gnu::naked]] void sync(void) {
-    SVCALL(22);
+    SVCALL(SYS_SYNC);
 }
 
 [[gnu::naked]] void* sbrk(off_t increment) {
-    SVCALL(38);
+    SVCALL(SYS_SBRK);
 }
 
 //get process data, e.g pid, ppid
 [[gnu::naked]] static pid_t getpdid(int type) {
-    SVCALL(39);
+    SVCALL(SYS_GETPDID);
 }
 
 pid_t getpid() {
@@ -137,16 +138,50 @@ pid_t getppid() {
     return getpdid(1);
 }
 
+[[gnu::naked]] int setgroups(int size, const gid_t* list) {
+    SVCALL(SYS_SETGROUPS);
+}
+
+int getgroups(int size, gid_t* list) {
+    return -1;
+}
+
+[[gnu::naked]] int setreuid(pid_t pid, uid_t ruid, uid_t euid) {
+    SVCALL(SYS_SETREUID);
+}
+
+[[gnu::naked]] int setregid(pid_t pid, gid_t rgid, gid_t egid) {
+    SVCALL(SYS_SETREGID);
+}
+
+uid_t getuid() {
+    return getpdid(3);
+}
+
+uid_t geteuid() {
+    return getpdid(2);
+}
+
+gid_t getgid() {
+    return getpdid(5);
+}
+
+gid_t getegid() {
+    return getpdid(4);
+}
+
 [[gnu::naked]] void _exit(int status) {
-    SVCALL(41);
+    SVCALL(SYS_EXIT);
 }
 
 [[gnu::naked]] int setpgid(pid_t pid, pid_t pgid) {
-    SVCALL(48);
+    SVCALL(SYS_SETPGRP);
 }
 
 [[gnu::naked]] pid_t getpgid(pid_t pid) {
-    SVCALL(49);
+    SVCALL(SYS_GETPGRP);
 }
+
+
 
 

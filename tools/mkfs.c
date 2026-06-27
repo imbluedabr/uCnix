@@ -62,14 +62,15 @@ struct ucfs_file {
 };
 
 
-void disk_init()
+void disk_init(int block_count)
 {
+    printf("block_count: %d\n", block_count);
     strcpy(disk.magic, "ucfs");
     for (int i = 0; i < 8; i++) {
         disk.block_bitmap[i] = 0;
     }
     disk.block_size = 512;
-    disk.block_count = 16;
+    disk.block_count = block_count;
     disk.block_used = 0;
     disk.inode_table_size = 4096;
     
@@ -181,10 +182,12 @@ void ucfs_mkroot(struct ucfs_file* root)
     i->indirect_block = block_alloc();
     i->nlinks = 1;
     i->perm.mode = FS_IFDIR | FS_IRUSR | FS_IXUSR;
+    i->perm.user = 0;
+    i->perm.group = 0;
     i->mtime = 0;
-
+    
     root->ino = ino;
-
+    printf("root inode:\n\tindirect_block: %d\n\tmode: %o\n\tino: %d\n", i->indirect_block, i->perm.mode, ino);
     ucfs_initdir(root);
 }
 
@@ -297,18 +300,26 @@ int main(int argc, char** argv)
     const char* target = NULL;
     const char* dest = NULL;
 
+    int blocks = 16;
+    
     for (int i = 1; i < argc; i++) {
         char* arg = argv[i];
         if (strcmp(arg, "-c") == 0) { //create file system
             mode = 0;
         } else if (strcmp(arg, "-e") == 0) { //examine file system
             mode = 1;
+        } else if (strcmp(arg, "-b") == 0) {
+            if (argv[i + 1] == NULL) {
+                printf("mkfs: no blocks passed\n");
+                return -1;
+            }
+            blocks = atoi(argv[++i]);
         } else if (mode == 0 && !target) {
             target = arg;
         } else if (!dest) {
             dest = arg;
         } else {
-            printf("mkfs: USAGE: mkfs [-ce] [TARGET] DEST\n");
+            printf("mkfs: USAGE: mkfs [-ceb] [BLOCKS] [TARGET] DEST\n");
             return -1;
         }
     }
@@ -322,7 +333,7 @@ int main(int argc, char** argv)
     }
 
     if (mode == 0) {
-        disk_init();
+        disk_init(blocks);
         ucfs_mkroot(&root);
         
         generate_fs(target, &root, root.ino);

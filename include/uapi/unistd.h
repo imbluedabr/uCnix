@@ -2,6 +2,14 @@
 #include <stddef.h>
 #include "sys/types.h"
 
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
 ssize_t read(int fd, void* buf, size_t count);
 ssize_t write(int fd, const void* buf, size_t count);
 int close(int fd);
@@ -22,8 +30,12 @@ pid_t getppid();
 void _exit(int status);
 int setpgid(pid_t pid, pid_t pgid);
 pid_t getpgid(pid_t pid);
-
-#define STDIN_FILENO 0
-#define STDOUT_FILENO 1
-#define STDERR_FILENO 2
+int setgroups(int size, const gid_t* list);
+int getgroups(int size, gid_t* list);
+int setreuid(pid_t pid, uid_t ruid, uid_t euid);
+int setregid(pid_t pid, gid_t rgid, gid_t egid);
+uid_t getuid();
+uid_t geteuid();
+gid_t getgid();
+gid_t getegid();
 

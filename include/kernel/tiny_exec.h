@@ -18,6 +18,14 @@ typedef struct {
     uint32_t program_break;
     uint32_t stack_size;
     uint32_t entry_point;
-    uint32_t padding1;
+    uint32_t rel_start;
+    uint32_t rel_end;
 } tiny_exec_hdr_t;
+
+
+#define R_ARM_RELATIVE 23
+typedef struct {
+    uint32_t r_offset;  // where to patch (offset in image)
+    uint32_t r_info;    // type + symbol index
+} elf_rel_t;
 

@@ -118,11 +118,10 @@ void kernel_init_process()
     current_process->ppid = 0;
     proc_pid_free(2);
     enable_interrupts(irq);
-    proc_free_process(p);
     proc_kill(1, SIGCONT);
     
 abort:
-    sys_exit(0);
+    proc_mark_zombie(current_process, 0);
 }
 
 void kernel_pre_init()

@@ -8,7 +8,7 @@
 struct utsname local_uname = {
     .sysname = "uCnix",
     .nodename = "nxp",
-    .release = "0.6.0",
+    .release = "0.6.5",
     .version = __DATE__,
     .machine = BOARD_ARCH " " TOSTRING(BOARD_TYPE)
 };

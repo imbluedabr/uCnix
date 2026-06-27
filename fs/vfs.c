@@ -1,6 +1,7 @@
 #include <fs/vfs.h>
 #include <uapi/sys/errno.h>
 #include <uapi/sys/fcntl.h>
+#include <uapi/unistd.h>
 #include <fs/devfs.h>
 #include <fs/ucfs.h>
 #include <kernel/interrupt.h>
@@ -121,11 +122,13 @@ mutex_t vfs_file_lock;
 
 struct file* file_alloc()
 {
+    mutex_lock(&vfs_file_lock);
     if (file_table_free_top == 0) {
         return NULL;
     }
     struct file* f = &vfs_file_table[file_table_free[--file_table_free_top]];
     f->refcount = 1;
+    mutex_unlock(&vfs_file_lock);
     return f;
 }
 
@@ -138,7 +141,6 @@ void file_free(struct file* f)
         return;
     }
     f->refcount = 0;
-    mutex_unlock(&vfs_file_lock);
     inode_free(f->i);
     
     if (file_table_free_top == VFS_MAXFILES)
@@ -147,6 +149,7 @@ void file_free(struct file* f)
     }
 
     file_table_free[file_table_free_top++] = f - vfs_file_table;
+    mutex_unlock(&vfs_file_lock);
 }
 
 struct file_ops* get_filesystem(const char* name)
@@ -440,14 +443,17 @@ off_t vfs_lseek(int fd, off_t offset, int whence)
 {
     struct file* f = proc_fd_get(current_process, fd);
     if (!f) return -EBADF;
-
-    if (whence == 0) {
-        mutex_lock(&vfs_file_lock);
+    
+    mutex_lock(&vfs_file_lock);
+    if (whence == SEEK_SET) {
         f->offset = offset;
-        mutex_unlock(&vfs_file_lock);
-        return offset;
+    } else if (whence == SEEK_CUR) {
+        f->offset += offset;
+    } else if (whence == SEEK_END) {
+        f->offset = f->i->size;
     }
-    return 0;
+    mutex_unlock(&vfs_file_lock);
+    return f->offset;
 }
 
 int vfs_ioctl(int fd, int cmd, void* arg)
@@ -482,7 +488,6 @@ int vfs_fcntl(int fd, int op, int arg)
             f->refcount++;
             mutex_unlock(&vfs_file_lock);
             return proc_fd_add(current_process, f);
-            break;
         default:
             return -EINVAL;
     }

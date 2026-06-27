@@ -1,6 +1,6 @@
 
 
-LIBC = ../libc
+LIBC = ../larpc
 TOOLCHAIN = arm-none-eabi
 KERNEL_HEADERS= ../../include/uapi
 INSTALL_DIR = ../../staging/bin

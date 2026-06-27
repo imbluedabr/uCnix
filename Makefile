@@ -141,7 +141,7 @@ userspace:
 	$(MAKE) -C $(ROOT)/userspace all
 
 rootfs.bin: userspace
-	$(ROOT)/tools/mkfs.elf -c $(ROOT)/staging rootfs.bin
+	$(ROOT)/tools/mkfs.elf -b 32 -c $(ROOT)/staging rootfs.bin
 
 rootfs.o: rootfs.bin
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm rootfs.bin rootfs.o

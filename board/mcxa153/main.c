@@ -8,18 +8,6 @@
 #include <drivers/hd44xxx.h>
 #include <drivers/romdisk.h>
 
-
-/*
-[[gnu::aligned(8)]] uint8_t test2_ustack[256];
-[[gnu::aligned(8)]] uint8_t test2_kstack[256];
-uint32_t test2_time;
-[[gnu::naked]] int __SVC(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint32_t arg3) {
-    __asm volatile(
-        "svc #0\n"
-        "bx lr"
-    );
-} */
-
 extern const uint8_t __rootfs_start[];
 extern const uint8_t __rootfs_end[];
 

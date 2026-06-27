@@ -29,8 +29,8 @@ struct file_ops;
 #define VFS_LOOKUP_BASE 1
 
 struct permissions {
-    uid_t user;
-    gid_t group;
+    uint8_t user;
+    uint8_t group;
     mode_t mode;
 };
 

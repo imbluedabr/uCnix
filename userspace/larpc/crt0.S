@@ -20,8 +20,10 @@
     .word __stack_size
     /* entry point */
     .word _start
-    /* padding */
-    .zero 0x4
+    /* rel_start */
+    .word __rel_start
+    /* rel_end */
+    .word __rel_end
 
     .text
     .thumb
@@ -30,7 +32,6 @@
 
     .align 2
 _start:
-    /* bkpt */
     /* sp should point to the start of the argv array, so it should be passed via r0 */
     movs r0, #0
     mov r1, sp

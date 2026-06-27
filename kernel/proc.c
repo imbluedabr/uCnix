@@ -31,6 +31,8 @@ bool proc_sched_started;
 uint8_t stack_free_list[PROC_MAX_PROC];
 uint8_t stack_free_list_top;
 
+static int proc_send_sig(pid_t pid, int sig);
+
 inline stack_t* proc_stack_alloc()
 {
     if (stack_free_list_top == 0) return NULL;
@@ -122,14 +124,12 @@ inline struct proc* proc_get_process(pid_t pid)
     struct proc* current = proc_active_list;
     while(current) {
         if (current->pid == pid) {
-            current->refcount++;
-            mutex_unlock(&proc_acces_lock);
-            return current;
+            break;
         }
         current = current->next;
     }
     mutex_unlock(&proc_acces_lock);
-    return NULL;
+    return current;
 }
 
 
@@ -138,11 +138,6 @@ inline void proc_free_process(struct proc* p)
 {
     mutex_lock(&proc_acces_lock);
     
-    if (--p->refcount > 0) {
-        mutex_unlock(&proc_acces_lock);
-        return;
-    }
-
     struct proc* current = proc_active_list;
     if (current == p) {
         proc_active_list = p->next;
@@ -179,7 +174,6 @@ inline struct proc* proc_alloc_process()
 
     p->next = proc_active_list;
     proc_active_list = p;
-    p->refcount = 1;
 
     mutex_unlock(&proc_acces_lock);
     return p;
@@ -214,10 +208,7 @@ int proc_reap(struct proc* p)
     if (p->state != PROC_ZOMBIE) return -255;
     inode_free(p->cwd);
     for (int i = 0; i < PROC_MAXFILES; i++) {
-        int index = p->local_fd_table[i];
-        if (index == 255) continue;
-        struct file* f = &vfs_file_table[index];
-        file_free(f);
+        vfs_close(i);
     }
     
     if (p->kernel_mode) {
@@ -229,22 +220,54 @@ int proc_reap(struct proc* p)
     if (p->program_base) {
         page_free(p->program_base);
     }
-
+    int exit_code = p->exit_code;
     proc_pid_free(p->pid);
     proc_free_process(p);
 
-    return p->exit_code;
+    return exit_code;
 }
 
-int proc_send_sig(pid_t pid, int sig)
+void proc_mark_zombie(struct proc* p, int exit_code)
 {
+    proc_stop_scheduling();
+    if (p->waiting_on) {
+        waiter_remove(p->waiting_on, p);
+    }
+
+    p->exit_code = exit_code;
+    p->state = PROC_ZOMBIE;
+
+    //reparent all the children to pid 1
+    struct proc* curr = proc_active_list;
+    while(curr) {
+        if (curr->ppid == p->pid) {
+            curr->ppid = 1;
+        }
+        curr = curr->next;
+    }
+    proc_send_sig(p->ppid, SIGCHLD);
+}
+
+
+void proc_kill_process(struct proc* p, int exit_code) {
+    if (p->state == PROC_BLOCKED || p->kernel_mode == 0) {
+        proc_mark_zombie(p, exit_code);
+    } else {
+        p->kill_pending = 1;
+        p->exit_code = exit_code;
+    }
+}
+
+static int proc_send_sig(pid_t pid, int sig)
+{
+    //kdbg("sig: %d to %d from %d\n", sig, pid, current_process->pid);
     if (sig > 31) return -EINVAL;
     if (sig < 0) return -EINVAL;
-    //kdbg("sig: %d to %d from %d\n", sig, pid, current_process->pid);
-
+    
+    
     struct proc* p = proc_get_process(pid);
     if (!p) return -ESRCH;
-    proc_stop_scheduling();
+    
     int action = 0;
     if (p->sigmask & (1 << sig)) {
         p->exit_code = sig;
@@ -271,28 +294,28 @@ int proc_send_sig(pid_t pid, int sig)
 
     }
     
-    proc_free_process(p);
     if (action == 1) {
         proc_unblock_process(p);
     } else if (action == 2) {
         proc_block(p);
     } else if (action == 3) {
-        proc_mark_zombie(p, 128 + sig);
-        proc_kill(p->ppid, SIGCHLD);
-        proc_restart_scheduling();
+        proc_kill_process(p, 128 + sig);
     } else {
-        proc_restart_scheduling();
+        proc_schedule();
     }
+
     return 0;
 }
 
 int proc_kill(pid_t pid, int sig)
 {
-    if (pid > -1) return proc_send_sig(pid, sig);
+    mutex_lock(&proc_acces_lock);
+
+    uint8_t proc_group[PROC_MAX_PROC];
+    int proc_count = 0;
+    int status = -ESRCH;
+
     if (pid < 0) {
-        uint8_t proc_group[PROC_MAX_PROC];
-        int proc_count = 0;
-        proc_stop_scheduling();
         struct proc* p = proc_active_list;
         while(p) {
             if (p->pgrp == -pid) {
@@ -300,14 +323,18 @@ int proc_kill(pid_t pid, int sig)
             }
             p = p->next;
         }
-        proc_restart_scheduling();
-        for (int i = 0; i < proc_count; i++) {
-            int status = proc_send_sig(proc_group[i], sig);
-            if (status < 0) return status;
-        }
-        return 0;
+    } else {
+        proc_group[proc_count++] = pid;
     }
-    return -EINVAL;
+
+    for (int i = 0; i < proc_count; i++) {
+        status = proc_send_sig(proc_group[i], sig);
+        if (i == 0 && status < 0) goto exit;
+    }
+
+exit:
+    mutex_unlock(&proc_acces_lock);
+    return status;
 }
 
 

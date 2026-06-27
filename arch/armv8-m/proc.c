@@ -24,11 +24,13 @@ void proc_sched_init()
     __enable_irq();
 }
 
-__attribute__((optimize("O2"))) struct proc* proc_create(process_desc_t* descriptor)
+/*__attribute__((optimize("O2")))*/ struct proc* proc_create(process_desc_t* descriptor)
 {
     struct proc* p = proc_alloc_process();
-
+    if (!p) return NULL;
     pid_t pid = proc_pid_alloc();
+    if (pid == 255) return NULL;
+
     p->pid = pid;
     p->kernel_mode = descriptor->kernel_mode;
 
@@ -67,6 +69,7 @@ __attribute__((optimize("O2"))) struct proc* proc_create(process_desc_t* descrip
             arg_adr[i] = (char*) p->psp;
             memcpy(p->psp, descriptor->argv[i], len);
             kdbg("proc: arg%d=\"%s\"\n", i, arg_adr[i]);
+            if (i > 8) break;
             i++;
         }
         p->psp = (uint8_t*) ((uint32_t) p->psp & ~0b11); //align down to 4 byte boundary
@@ -114,32 +117,11 @@ __attribute__((optimize("O2"))) struct proc* proc_create(process_desc_t* descrip
     return p;
 }
 
-void proc_mark_zombie(struct proc* p, int exit_code)
-{
-    if (p->waiting_on) {
-        waiter_remove(p->waiting_on, p);
-    }
-    __disable_irq();
-    
-    //reparent all the children to pid 1
-    struct proc* curr = proc_active_list;
-    while(curr) {
-        if (curr->ppid == p->pid) {
-            curr->ppid = 1;
-        }
-        curr = curr->next;
-    }
-
-    p->exit_code = exit_code;
-    p->state = PROC_ZOMBIE;
-    __enable_irq();
-}
 
 void proc_unblock_process(struct proc* p)
 {
     __disable_irq();
     p->state = PROC_READY;
-    proc_sched_started = true;
     proc_enqueue(p);
     SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
     __DSB();

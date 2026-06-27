@@ -37,7 +37,6 @@ void mutex_lock(mutex_t* mut)
     //claim the lock
     mut->lock = 1;
     mut->owner = current_process->pid;
-    current_process->crit_section = 1;
     mut->count = 1;
     enable_interrupts(irq);
 }
@@ -48,6 +47,7 @@ void mutex_unlock(mutex_t* mut)
     int irq = disable_interrupts();
     
     if (mut->owner != current_process->pid) {
+        __BKPT();
         //PANIC!!!!
     }
 
@@ -56,11 +56,9 @@ void mutex_unlock(mutex_t* mut)
         enable_interrupts(irq);
         return;
     }
-    current_process->crit_section = 0;
     //pop the next process of the wait queue
     struct proc* next = waiter_pop(&mut->waiter);
     if (next) {
-        next->crit_section = 1;
         mut->owner = next->pid;
         enable_interrupts(irq);
         proc_unblock_process(next);

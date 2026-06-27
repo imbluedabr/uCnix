@@ -63,7 +63,6 @@ int read_block(struct romdisk_device* dev, void* buffer, off_t lba)
     if (lba*dev->conf.bsize >= (off_t)(dev->conf.rom_end - dev->conf.rom_base)) {
         return -1;
     }
-
     uint8_t* start = ((uint8_t*) dev->conf.rom_base) + lba*dev->conf.bsize;
     
     memcpy(buffer, start, dev->conf.bsize);

@@ -1,8 +1,9 @@
 #include <sys/dir.h>
+#include <syscalls.h>
 #include "svcall.h"
 
 [[gnu::naked]] int readdir(int fd, struct dirent* buf, int count) {
-    SVCALL(13);
+    SVCALL(SYS_READDIR);
 }
 
 
