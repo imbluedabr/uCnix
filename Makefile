@@ -30,6 +30,17 @@ ARCH_LDFLAGS = -mthumb -mcpu=cortex-m33+nodsp -Wl,-z,max-page-size=4
 $(shell echo "#define BOARD_MCXA153" >> $(SETTINGS_FILE))
 endif
 
+ifeq ($(CONFIG_BOARD_LPC55S69), y)
+ARCH = armv8-m
+BOARD = lpc55s69
+TOOLCHAIN = arm-none-eabi
+ARCH_CFLAGS = -mthumb -mcpu=cortex-m33 -mfloat-abi=soft -std=gnu11 -DCPU_LPC55S69JBD100_cm33_core0 
+ARCH_LDFLAGS = -mthumb -mcpu=cortex-m33
+$(shell echo "#define BOARD_LPC55S69" >> $(SETTINGS_FILE))
+endif
+
+
+
 $(shell echo "#define BOARD_ARCH \"$(ARCH)\"" >> $(SETTINGS_FILE))
 
 # the filesystems
@@ -60,6 +71,12 @@ ifeq ($(CONFIG_USART_DRIVER_MCXA), y)
 DEV_SELECT += drivers/usart/mcxa.c
 $(shell echo "#define USART_DRIVER_MCXA" >> $(SETTINGS_FILE))
 endif
+ifeq ($(CONFIG_USART_DRIVER_LPC55S69), y)
+DEV_SELECT += drivers/usart/lpc55s69.c
+$(shell echo "#define USART_DRIVER_LPC55S69" >> $(SETTINGS_FILE))
+endif
+
+
 
 
 ifeq ($(CONFIG_HD44XXX_DRIVER), y)

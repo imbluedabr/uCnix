@@ -2,7 +2,8 @@
 #include <kernel/device.h>
 
 typedef enum : uint8_t {
-    MCXA_LPUART
+    MCXA_LPUART,
+    LPC55S69_USART,
 } usart_type_e;
 
 extern const int usart_baud_rates[11];

@@ -5,7 +5,6 @@
 #include <kernel/devtbl.h>
 
 #include <drivers/usart.h>
-#include <drivers/hd44xxx.h>
 #include <drivers/romdisk.h>
 
 extern const uint8_t __rootfs_start[];
@@ -33,14 +32,6 @@ const device_node_t static_device_table[] = {
         }
     },
     {
-        .major = HD44XXX_MAJOR,
-        .preinit = 0,
-        .desc = &(struct hd44xxx_desc) {
-            .port = NULL,
-            .type = HD_ST_9720
-        }
-    },
-    {
         .major = ROMDISK_MAJOR,
         .preinit = 0,
         .desc = &(struct romdisk_desc) {
@@ -51,7 +42,7 @@ const device_node_t static_device_table[] = {
     }
 
 };
-const int static_device_table_size = 4;
+const int static_device_table_size = 3;
 
 [[gnu::aligned(8)]] uint8_t __heap_start[2816];
 const int __heap_size = sizeof(__heap_start);

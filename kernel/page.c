@@ -7,13 +7,11 @@ static uint8_t unused_blocks[8];
 
 void page_init()
 {
-    heap_init(&userspace_allocator, blk_array, unused_blocks, __userspace_start, 0x6000, 8);
+    heap_init(&userspace_allocator, blk_array, unused_blocks, __userspace_start, __userspace_end - __userspace_start, 8, 4);
 }
 
 void* page_alloc(int size)
-{
-    if (size & 0b11) size = (size & ~0b11) + 4;
-    
+{    
     return heap_alloc(&userspace_allocator, size);
 }
 

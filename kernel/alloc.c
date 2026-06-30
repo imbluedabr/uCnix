@@ -1,6 +1,7 @@
 #include <kernel/alloc.h>
 #include <kernel/lock.h>
 #include <lib/stdlib.h>
+#include <lib/kprint.h>
 #include <stddef.h>
 
 static inline struct block* get_block(struct mem_alloc* heap)
@@ -28,17 +29,18 @@ static inline void put_block(struct mem_alloc* heap, struct block* b)
     heap->unused_blocks[heap->unused_blocks_top++] = idx;
 }
 
-void heap_init(struct mem_alloc* heap, struct block* blk_array, uint8_t* unused_blocks, void* base, int size, int blk_count)
+void heap_init(struct mem_alloc* heap, struct block* blk_array, uint8_t* unused_blocks, void* base, int size, int blk_count, int blk_shift)
 {
     mutex_init(&heap->alloc_mut);
     heap->block_base = base;
     heap->blk = blk_array;
-    heap->blk[0].size = size;
+    heap->blk[0].size = size >> blk_shift; //so the block shift basicly sets a unit size, so instead of the size of a block being expressed in bytes its expressed as units of 2^blk_shift. this allows the allocator to address more memory then the limit of the size member
     heap->blk[0].occupied = false;
     heap->blk[0].next = BLOCK_NIL;
     heap->blk[0].prev = BLOCK_NIL;
     heap->unused_blocks_top = 0;
     heap->blk_count = blk_count;
+    heap->blk_shift = blk_shift;
     heap->unused_blocks = unused_blocks;
     for (int i = 1; i < blk_count; i++) {
         heap->unused_blocks[heap->unused_blocks_top++] = i;
@@ -50,21 +52,22 @@ void heap_stat(struct mem_alloc* heap, struct memstat* buff)
     struct block* current = get_block_addr(heap, 0);
     bool prev_occupied = true;
     memset(buff, 0, sizeof(struct memstat));
-
+    
     while (current) {
 
         if (prev_occupied != current->occupied) {
             buff->fragmentation++;
         }
         prev_occupied = current->occupied;
-
+        
         if (current->occupied) {
             buff->blocks_used++;
-            buff->bytes_used += current->size;
+            buff->bytes_used += current->size << heap->blk_shift;
         }
         
         buff->blocks_total++;
-        buff->bytes_total += current->size;
+        buff->bytes_total += current->size << heap->blk_shift;
+
         if (current->next == BLOCK_NIL) {
             return;
         }
@@ -75,7 +78,7 @@ void heap_stat(struct mem_alloc* heap, struct memstat* buff)
 void* heap_alloc(struct mem_alloc* heap, int size)
 {
     mutex_lock(&heap->alloc_mut);
-    
+    size = (size + ((1 << heap->blk_shift) - 1)) >> heap->blk_shift; //round to block unit size
     struct block* current = get_block_addr(heap, 0);
     char* base = heap->block_base;
     do {
@@ -108,7 +111,7 @@ void* heap_alloc(struct mem_alloc* heap, int size)
             base = NULL;
             break;
         }
-        base += current->size;
+        base += current->size << heap->blk_shift;
         current = get_block_addr(heap, current->next);
     } while(1);
 
@@ -164,7 +167,7 @@ void heap_free(struct mem_alloc* heap, void* ptr)
         if (current->next == BLOCK_NIL) {
             break;
         }
-        base += current->size;
+        base += current->size << heap->blk_shift;
         current = get_block_addr(heap, current->next);
     } while(1);
     mutex_unlock(&heap->alloc_mut);

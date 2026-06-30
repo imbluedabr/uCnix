@@ -5,6 +5,7 @@
 #include <kernel/majors.h>
 #include <kernel/proc.h>
 #include "mcxa.h"
+#include "lpc55s69.h"
 
 //build table of available backends
 static const struct usart_impl impl_table[] = {
@@ -15,6 +16,15 @@ static const struct usart_impl impl_table[] = {
         .writeb = &usart_mcxa_writeb,
         .ioctl = &usart_mcxa_ioctl,
         .destroy = &usart_mcxa_destroy
+    }
+#endif
+#ifdef USART_DRIVER_LPC55S69
+    [1] = {
+        .init = &usart_lpc55s69_init,
+        .readb = &usart_lpc55s69_readb,
+        .writeb = &usart_lpc55s69_writeb,
+        .ioctl = &usart_lpc55s69_ioctl,
+        .destroy = &usart_lpc55s69_destroy
     }
 #endif
 };

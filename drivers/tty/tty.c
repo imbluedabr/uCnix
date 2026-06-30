@@ -87,7 +87,7 @@ static void tty_read(struct tty_device* tty, struct io_request* req)
             ((char*) req->buffer)[--tty->bytes_copied] = ' ';
         }
 
-        if (c == '\r') {
+        if (c == '\r' || c == '\n') {
             ((char*) req->buffer)[tty->bytes_copied++] = '\n';
             while(tty_writeb(&tty->base, '\n') == -1);
             goto end;

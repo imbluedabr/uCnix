@@ -12,6 +12,7 @@
 #include <kernel/devtbl.h>
 #include <kernel/exec.h>
 #include <kernel/page.h>
+#include <kernel/tiny_exec.h>
 #include <fs/vfs.h>
 #include <drivers/tty.h>
 #include <drivers/hd44xxx.h>
@@ -69,7 +70,6 @@ stop:
 void kernel_init_process()
 {
     kinfo("vfs: mounting rootfs on dev (%d,%d) of type (%s) on /\n", MAJOR(ROOTFS_DEVNO), MINOR(ROOTFS_DEVNO), ROOTFS_TYPE);
-
     int status = vfs_mount_root(ROOTFS_DEVNO, ROOTFS_TYPE, 0);
     if (status < 0) {
         kerr("vfs: rootfs mount failed! errno=%d\n", status);
@@ -94,21 +94,26 @@ void kernel_init_process()
     devfs->fops->mknod(devfs, "tty0", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 0));
     devfs->fops->mknod(devfs, "tty1", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 1));
     
-    
-    
     int stdin = vfs_open("/dev/tty0", O_RDWR);
     int stdout = vfs_fcntl(stdin, F_DUPFD, 0);
-    int stderr = vfs_fcntl(stdin, F_DUPFD, 0);
-    kinfo("init: starting userspace init\n");
+    int stderr = vfs_fcntl(stdin, F_DUPFD, 0);    
+    
     fd_set fd_list;
     FD_ZERO(fd_list);
     FD_SET(stdin, fd_list);
     FD_SET(stdout, fd_list);
     FD_SET(stderr, fd_list);
+    kinfo("init: starting userspace init\n");
+   
     status = sys_spawn(INIT_PATH, &fd_list, NULL);
-    if (status < 0) goto abort;
-
+    if (status < 0) {
+        kerr("init: sys_spawn failed with %d\n", status);
+        goto abort;
+    }
+    
+    
     //reparent userspace init
+    
     int irq = disable_interrupts();
     struct proc* p = proc_get_process(2);
     if (!p) goto abort;
@@ -135,11 +140,19 @@ void kernel_pre_init()
     proc_init();
     syscall_init();
     vfs_init();
-
+    
+#ifdef USART_DRIVER
     usart_init();
+#endif
+#ifdef HD44XXX_DRIVER
     hd44xxx_init();
+#endif
+#ifdef ROMDISK_DRIVER
     romdisk_init();
+#endif
+#ifdef TTY_DRIVER
     tty_init();
+#endif
 }
 
 const process_desc_t kernel_worker_proc = {
@@ -169,6 +182,10 @@ const process_desc_t kernel_init_proc = {
        
     kprintf("\e[1;35m%s %s %s %s %s\n\e[1;39m", local_uname.sysname, local_uname.nodename, local_uname.release, local_uname.version, local_uname.machine);
     
+    struct memstat buff;
+    heap_stat(&userspace_allocator, &buff);
+    kinfo("user memory: %d KiB, base address: 0x%x\n", buff.bytes_total/1024, userspace_allocator.block_base);
+
     devtbl_init();
 
     device_create(&tty1, TTY_MAJOR, &(struct tty_desc) {

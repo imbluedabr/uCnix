@@ -7,7 +7,7 @@ static uint8_t unused_blocks[64];
 
 void kmalloc_init(void* heap_base, int heap_size)
 {
-    heap_init(&kernel_allocator, blk_array, unused_blocks, heap_base, heap_size, 64);
+    heap_init(&kernel_allocator, blk_array, unused_blocks, heap_base, heap_size, 64, 0);
 }
 
 inline void* kmalloc(int size)

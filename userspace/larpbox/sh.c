@@ -127,6 +127,7 @@ int builtin_sh(int argc, char** argv)
         if (read(STDIN_FILENO, line_buff, sizeof(line_buff)) == 0) break; //CTRL+D
         execute_command(line_buff);
     }
+    puts("exit\n");
     return 0;
 }
 

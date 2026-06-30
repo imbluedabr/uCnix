@@ -61,9 +61,8 @@ void parse_line(char *line) {
 
     arg_vec[arg_cnt] = NULL;
     pid_t sess = start_program(arg_vec);
-    if (sess < 0) {
-        printf("init: sess=%d\n", sess);
-    } else {
+    printf("init: sess=%d\n", sess);
+    if (sess > 0) {
         session_list[session_count++] = sess;
     }
 }

@@ -33,7 +33,6 @@ __attribute__((optimize("O2"))) int sys_spawn(const char* path, fd_set* fd_list,
 {
     int fd = vfs_open(path, O_RDONLY);
     if (fd < 0) return fd;
-
     struct stat statbuff;
     vfs_fstat(fd, &statbuff);
 
