@@ -9,3 +9,4 @@ staging/*
 *.dump.old
 *.map
 *.su
+.cache

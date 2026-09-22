@@ -8,7 +8,7 @@ CONFIG ?= .config
 
 SETTINGS_FILE = $(ROOT)/include/kernel/settings.h
 
-$(shell echo "#define ROOTFS_DEVNO (($(CONFIG_ROOTFS_DEV_MAJOR) << 4) | $(CONFIG_ROOTFS_DEV_MINOR))" > $(SETTINGS_FILE))
+$(shell echo "#define ROOTFS_DEVNO (($(CONFIG_ROOTFS_DEV_MAJOR) << 8) | $(CONFIG_ROOTFS_DEV_MINOR))" > $(SETTINGS_FILE))
 $(shell echo "#define ROOTFS_TYPE \"$(CONFIG_ROOTFS_TYPE)\"" >> $(SETTINGS_FILE))
 $(shell echo "#define INIT_PATH \"$(CONFIG_INIT_PATH)\"" >> $(SETTINGS_FILE))
 $(shell echo "#define INIT_CONSOLE_RDEV $(CONFIG_INIT_CONSOLE_RDEV)" >> $(SETTINGS_FILE))
@@ -44,7 +44,7 @@ endif
 $(shell echo "#define BOARD_ARCH \"$(ARCH)\"" >> $(SETTINGS_FILE))
 
 # the filesystems
-FS_SELECT = fs/vfs.c fs/devfs.c
+FS_SELECT = fs/vfs.c fs/devfs.c fs/idapi.c
 
 ifeq ($(CONFIG_FS_UCFS), y)
 FS_SELECT += fs/ucfs.c
@@ -107,7 +107,7 @@ ASRCS = $(wildcard arch/$(ARCH)/*.S) \
 		$(wildcard board/$(BOARD)/*.S)
 
 #include options
-INCL ?= -I$(ROOT)/include
+INCL ?= -I$(ROOT)/include -isystem $(shell $(CC) -print-file-name=include)
 
 #linker file
 LNKF = $(ROOT)/board/$(BOARD)/linker.ld
@@ -117,9 +117,9 @@ LNKP ?=
 
 MN_FILE ?= kernel.elf
 
-CFLAGS = $(ARCH_CFLAGS) -fstack-usage -ffreestanding -Wall -Wextra -Wno-unused-parameter  $(INCL)
+CFLAGS = $(ARCH_CFLAGS) -fstack-usage -ffreestanding -nostdinc -Wall -Wextra -Wno-unused-parameter  $(INCL)
 ASFLAGS = $(CFLAGS)
-LDFLAGS = $(ARCH_LDFLAGS) -fstack-usage -nostartfiles -static -Wl,-Map=kernel.map
+LDFLAGS = $(ARCH_LDFLAGS) -fstack-usage -ffreestanding -nostartfiles -static -Wl,-Map=kernel.map
 
 
 ifeq ($(CONFIG_DEBUG), y)

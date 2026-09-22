@@ -1,4 +1,4 @@
-#define ROOTFS_DEVNO ((2 << 4) | 0)
+#define ROOTFS_DEVNO ((2 << 8) | 0)
 #define ROOTFS_TYPE "ucfs"
 #define INIT_PATH "/bin/init"
 #define INIT_CONSOLE_RDEV 0
