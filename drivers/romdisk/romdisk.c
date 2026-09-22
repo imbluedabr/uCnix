@@ -34,12 +34,12 @@ struct device* romdisk_probe(struct bus_device* parent, const void* descriptor)
     const struct mmio_bus_desc* desc = descriptor;
     struct romdisk_device* dev = kzalloc(sizeof(struct romdisk_device));
     if (!dev) return NULL;
-
+	int size = (uint8_t*)desc->size - desc->base;
     dev->base.ops = (struct dev_ops*) &romdisk_ops;
     dev->conf = *desc;
-    uint32_t block_count = desc->size/ROMDISK_BLK_SECSZ;
+    uint32_t block_count = size/ROMDISK_BLK_SECSZ;
 
-    kdbg("romdsk: BLK_NSEC=%d, BLK_SECSZ=%d, BLK_SZ=%d\n", block_count, ROMDISK_BLK_SECSZ, desc->size);
+    kdbg("romdsk: BLK_NSEC=%d, BLK_SECSZ=%d, BLK_SZ=%d\n", block_count, ROMDISK_BLK_SECSZ, size);
     return &dev->base;
 }
 
@@ -47,12 +47,13 @@ int romdisk_ioctl(struct file* f, int cmd, void* arg)
 {
     struct romdisk_device* romdisk = (struct romdisk_device*) f->i->devfs.dev;
     size_t* s_arg = arg;
+	int size = (uint8_t*)romdisk->conf.size - romdisk->conf.base;
     switch(cmd) {
         case IOCTL_BLK_GETSZ:
-            *s_arg = romdisk->conf.size;
+            *s_arg = size;
             break;
         case IOCTL_BLK_GETNSEC:
-            *s_arg = romdisk->conf.size/ROMDISK_BLK_SECSZ;
+            *s_arg = size/ROMDISK_BLK_SECSZ;
             break;
         case IOCTL_BLK_GETSECSZ:
             *s_arg = ROMDISK_BLK_SECSZ;
@@ -67,7 +68,8 @@ ssize_t romdisk_read(struct file* f, void* buff, size_t count)
 {
     struct romdisk_device* disk = (struct romdisk_device*) f->i->devfs.dev;
     count = ALIGN(count, ROMDISK_BLK_SECSZ);
-    if ((f->offset + count) > disk->conf.size) count = disk->conf.size - f->offset;
+	int size = (uint8_t*)disk->conf.size - disk->conf.base;
+    if ((f->offset + count) > size) count = size - f->offset;
     memcpy(buff, disk->conf.base + f->offset, count);
     return count;
 }
@@ -88,7 +90,7 @@ off_t romdisk_lseek(struct file* f, off_t offset, int whence)
     } else {
         return  -EINVAL;
     }
-    if (curr_offset > disk->conf.size/ROMDISK_BLK_SECSZ)
+    if (curr_offset > ((uint8_t*)disk->conf.size - disk->conf.base))
         return -EINVAL;
     f->offset = curr_offset;
     return curr_offset;
