@@ -10,39 +10,27 @@
 extern const uint8_t __rootfs_start[];
 extern const uint8_t __rootfs_end[];
 
-const device_node_t static_device_table[] = {
-    {
-        .major = USART_MAJOR,
-        .preinit = 1,
-        .desc = &(struct usart_desc) {
-            .uart_num = 0,
-            .baud = 10,
-            .irq = LPUART0_IRQn,
-            .type = MCXA_LPUART
-        }
-    },
-    {
-        .major = USART_MAJOR,
-        .preinit = 0,
-        .desc = &(struct usart_desc) {
-            .uart_num = 1,
-            .baud = 10,
-            .irq = LPUART1_IRQn,
-            .type = MCXA_LPUART
-        }
-    },
-    {
-        .major = ROMDISK_MAJOR,
-        .preinit = 0,
-        .desc = &(struct romdisk_desc) {
-            .rom_base = __rootfs_start,
-            .rom_end = __rootfs_end,
-            .bsize = 512
-        }
-    }
-
+static const struct mmio_bus_desc usart0_desc = {
+	.base = (uint8_t*) LPUART0,
+	.vendor_id = USART_MCXA,
+	.major = USART_MAJOR,
+	.irq = LPUART0_IRQn
 };
-const int static_device_table_size = 3;
+
+const dt_node_t static_device_tree = {
+	.child = &(dt_node_t) {
+		.preinit = 1,
+		.desc = &usart0_desc,
+	.next = &(dt_node_t) {
+		.preinit = 0,
+		.desc = &(struct mmio_bus_desc) {
+			.base = __rootfs_start,
+			.size = (size_t) __rootfs_end,
+			.major = ROMDISK_MAJOR
+		}
+	}
+	}
+};
 
 [[gnu::aligned(8)]] uint8_t __heap_start[2816];
 const int __heap_size = sizeof(__heap_start);
@@ -51,9 +39,9 @@ void main()
 {
     kernel_pre_init();
     __enable_irq();
-
-    dev_t usart0_devno;
-    device_create(&usart0_devno, USART_MAJOR, static_device_table[0].desc);
+	
+	//initialize the boot console
+    device_probe(USART_MAJOR, NULL, &usart0_desc);
    
     kernel_init();
 }
