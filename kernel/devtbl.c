@@ -20,14 +20,20 @@ void list_devices(int major)
 
 void walk_dt(struct bus_device* parent, const dt_node_t* node)
 {
+	if (node->preinit) return;
+
     struct device* dev;
-    if (!parent) { //the first layer is always an 
+    if (!parent) { //the first layer is always an mmio descriptor
         const struct mmio_bus_desc* desc = node->desc;
         dev = device_probe(desc->major, NULL, desc);
     } else {
         dev = parent->bus_ops->probe(parent, node->desc);
     }
-    if (!dev) return;
+    
+	if (!dev) {
+    	kerr("dev: failed to create device\n");
+		return;
+	}
 
     for (const dt_node_t* child = node->child; child; child = child->next) {
         walk_dt((struct bus_device*) dev, child);

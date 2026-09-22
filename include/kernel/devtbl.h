@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 typedef struct dt_node {
+	const int preinit;
     const void* desc;
     const struct dt_node* child;
     const struct dt_node* next;
