@@ -36,14 +36,3 @@ ino_t devfs_lookup(struct inode* dir, const char* name); //lookup an inode insid
 struct inode* devfs_read_i(struct filesystem* fs, ino_t ino); //read an inode
 //int (*write_i)(struct inode* target); //write an inode
 
-
-
-
-
-
-
-
-
-
-
-

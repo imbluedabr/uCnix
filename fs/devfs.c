@@ -20,8 +20,9 @@ const struct file_ops devfs_file_ops = {
 ssize_t devfs_read(struct file* f, char* buff, int count)
 {
     struct inode* i = f->i;
-    if (i->devfs.dev && i->perm.mode & S_IFDEV) {
-        return device_read(i->devfs.dev, buff, count, f->offset);
+	struct device* dev = i->devfs.dev;
+    if (dev && i->perm.mode & S_IFDEV) {
+        return dev->ops->read(f, buff, count);
     }
     return -EIO;
 }
@@ -29,8 +30,9 @@ ssize_t devfs_read(struct file* f, char* buff, int count)
 ssize_t devfs_write(struct file* f, const char* buff, int count)
 {
     struct inode* i = f->i;
-    if (i->devfs.dev && i->perm.mode & S_IFDEV) {
-        return device_write(i->devfs.dev, (void*) buff, count, f->offset);
+	struct device* dev = i->devfs.dev;
+    if (dev && i->perm.mode & S_IFDEV) {
+        return dev->ops->read(f, (void*) buff, count);
     }
     return -EIO;
 }
@@ -192,6 +194,4 @@ error:
 }
 
 //int (*write_i)(struct inode* target); //write an inode
-
-
 
