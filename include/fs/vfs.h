@@ -106,7 +106,7 @@ struct file_ops {
 };
 
 
-
+extern struct inode* cache_list;
 extern mutex_t vfs_cache_lock;
 struct inode* inode_alloc();
 void inode_free(struct inode* i);

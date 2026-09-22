@@ -13,7 +13,7 @@
 #include <lib/kprint.h>
 
 static struct inode* free_list;
-static struct inode* cache_list;
+struct inode* cache_list;
 static uint8_t cache_list_size;
 static uint8_t free_list_size;
 
@@ -368,7 +368,7 @@ ssize_t vfs_read(int fd, void* buffer, size_t count)
 {
     ssize_t n;
     struct file* f = proc_fd_get(current_process, fd);
-    if (!f || FS_GET_FDMODE(f->flags) != O_WRONLY) {
+    if (!f || FS_GET_FDMODE(f->flags) == O_WRONLY) {
         return -EBADF;
     }
 
@@ -376,11 +376,11 @@ ssize_t vfs_read(int fd, void* buffer, size_t count)
         return -EISDIR;
     }
 
+	//TODO: add proper file locking
     n = f->i->fs->fops->read(f, buffer, count);
-
-    mutex_lock(&vfs_file_lock);
+    //mutex_lock(&vfs_file_lock);
     if (n > 0) f->offset += n;
-    mutex_unlock(&vfs_file_lock);
+    //mutex_unlock(&vfs_file_lock);
     return n;
 }
 
@@ -395,10 +395,10 @@ ssize_t vfs_write(int fd, const void* buffer, size_t count)
         return -EISDIR;
     }
 
+    //mutex_lock(&vfs_file_lock);
     ssize_t n = f->i->fs->fops->write(f, buffer, count);
-    mutex_lock(&vfs_file_lock);
     if (n > 0) f->offset += n;
-    mutex_unlock(&vfs_file_lock);
+    //mutex_unlock(&vfs_file_lock);
     return n;
 }
 
@@ -519,12 +519,13 @@ int vfs_fchdir(int fd)
 ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count)
 {
     struct file* f = proc_fd_get(current_process, fd);
-    if (!f || !(f->flags & O_RDONLY)) {
+    if (!f || !(FS_GET_FDMODE(f->flags) == O_RDONLY)) {
         return -EBADF;
     }
 
     //check if it is a directory or nah
-    if (!(f->i->perm.mode & S_IFDIR)) {
+	kdbg("ftype: %d\n", FS_GET_FTYPE(f->i->perm));
+    if (FS_GET_FTYPE(f->i->perm) != S_IFDIR) {
         return -ENOTDIR;
     }
     if (f->offset == 0 && count > 0) {
