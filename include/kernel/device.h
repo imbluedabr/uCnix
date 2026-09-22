@@ -77,8 +77,8 @@ struct bus_ops {
     int (*i2c_rx)(struct bus_device* bus, uint8_t addr, uint8_t* buff, int count);
 
     //uart
-    int (*uart_tx)(struct bus_device* bus, uint8_t* buff);
-    int (*uart_rx)(struct bus_device* bus, uint8_t* buff);
+    int (*uart_tx)(struct bus_device* bus, uint8_t* buff, int count);
+    int (*uart_rx)(struct bus_device* bus, uint8_t* buff, int count);
     
     //gpio
     int (*gpio_mode_set)(struct bus_device* bus, int mask);
