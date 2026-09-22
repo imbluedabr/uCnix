@@ -2,7 +2,7 @@
 #include <kernel/lock.h>
 #include <stdarg.h>
 
-extern struct device* boot_console;
+extern struct file boot_console;
 extern mutex_t console_lock;
 typedef enum { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERR } log_e;
 

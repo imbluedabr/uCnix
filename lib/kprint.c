@@ -6,27 +6,24 @@
 #include <kernel/device.h>
 #include <kernel/lock.h>
 #include <kernel/time.h>
+#include <fs/vfs.h>
 
 
-struct device* boot_console;
+struct file boot_console;
 
 mutex_t console_lock;
 
 void kputc(char c)
 {
-    while(boot_console->driver->writeb(boot_console, c) == -1) {
-        //boot_console->driver->update(boot_console);
-    };
+	boot_console.i->devfs.dev->ops->write(&boot_console, &c, 1);
 }
 
 void kputs(const char *str)
 {
-    while (*str != '\0')
-    {
-        kputc(*str++);
-    }
+	boot_console.i->devfs.dev->ops->write(&boot_console, str, strlen(str));
 }
 
+//TODO: either add buffering inside kvprintf or make a specific /dev/kmsg driver to buffer this so its more performant
 void kvprintf(const char *fmt, va_list params)
 {
     static char temp_buff[32];
