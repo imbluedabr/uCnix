@@ -14,6 +14,7 @@
 #include <kernel/page.h>
 #include <kernel/tiny_exec.h>
 #include <fs/vfs.h>
+#include <fs/idapi.h>
 #include <drivers/tty.h>
 #include <drivers/hd44xxx.h>
 #include <drivers/romdisk.h>
@@ -49,7 +50,6 @@ void kernel_worker_process()
             current_process->exit_code = 0;
             proc_restart_scheduling();
         }
-        device_global_update();
     }
 
 stop:
@@ -94,7 +94,8 @@ void kernel_init_process()
     devfs->fops->mknod(devfs, "tty0", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 0));
     devfs->fops->mknod(devfs, "tty1", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 1));
     
-    int stdin = vfs_open("/dev/tty0", O_RDWR);
+
+	int stdin = vfs_open("/dev/tty0", O_RDWR);
     int stdout = vfs_fcntl(stdin, F_DUPFD, 0);
     int stderr = vfs_fcntl(stdin, F_DUPFD, 0);    
     
@@ -104,7 +105,7 @@ void kernel_init_process()
     FD_SET(stdout, fd_list);
     FD_SET(stderr, fd_list);
     kinfo("init: starting userspace init\n");
-   
+
     status = sys_spawn(INIT_PATH, &fd_list, NULL);
     if (status < 0) {
         kerr("init: sys_spawn failed with %d\n", status);
@@ -124,7 +125,7 @@ void kernel_init_process()
     proc_pid_free(2);
     enable_interrupts(irq);
     proc_kill(1, SIGCONT);
-    
+	
 abort:
     proc_mark_zombie(current_process, 0);
 }
@@ -140,6 +141,7 @@ void kernel_pre_init()
     proc_init();
     syscall_init();
     vfs_init();
+	idapi_init();
     
 #ifdef USART_DRIVER
     usart_init();
@@ -172,26 +174,24 @@ const process_desc_t kernel_init_proc = {
 [[noreturn]] void kernel_init()
 {
     //initialize boot console
-    dev_t tty0;
-    dev_t tty1;
+	
+	struct termios settings = {
+		.o_flag = ONLRET
+	};
+	//create boot console tty
+	tty_create(INIT_CONSOLE_RDEV, INIT_CONSOLE_WDEV, &settings);
+    
+	idapi_opendev(&boot_console, MKDEV(TTY_MAJOR, 0), 0); //tty0
 
-    boot_console = device_create(&tty0, TTY_MAJOR, &(struct tty_desc) {
-            .reader = INIT_CONSOLE_RDEV,
-            .writer = INIT_CONSOLE_WDEV
-            });
-       
     kprintf("\e[1;35m%s %s %s %s %s\n\e[1;39m", local_uname.sysname, local_uname.nodename, local_uname.release, local_uname.version, local_uname.machine);
     
     struct memstat buff;
     heap_stat(&userspace_allocator, &buff);
     kinfo("user memory: %d KiB, base address: 0x%x\n", buff.bytes_total/1024, userspace_allocator.block_base);
 
-    devtbl_init();
-
-    device_create(&tty1, TTY_MAJOR, &(struct tty_desc) {
-        .reader = MKDEV(USART_MAJOR, 1),
-        .writer = MKDEV(USART_MAJOR, 1)
-        });
+    devtbl_init(&static_device_tree);
+	
+	tty_create(MKDEV(USART_MAJOR, 1), MKDEV(USART_MAJOR, 1), &settings);
     
     kinfo("init: starting kernel worker\n");
     struct proc* p = proc_create(&kernel_worker_proc);
