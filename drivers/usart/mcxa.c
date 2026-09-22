@@ -32,7 +32,7 @@ static const struct init_entry init_table[] = {
     {
         .clksel_addr = &MRCC0->MRCC_LPUART0_CLKSEL,
         .clksel_bit = MRCC_MRCC_LPUART0_CLKSEL_MUX(2),
-        .clkdiv_addr = &MRCC0->MRCC_LPUART2_CLKSEL,
+        .clkdiv_addr = &MRCC0->MRCC_LPUART0_CLKDIV,
         .clkdiv_bit = 0,
         .glb_bit0 = MRCC_MRCC_GLB_CC0_LPUART0(1),
         .glb_bit1 = MRCC_MRCC_GLB_CC0_PORT0(1),
@@ -46,7 +46,7 @@ static const struct init_entry init_table[] = {
     {
         .clksel_addr = &MRCC0->MRCC_LPUART1_CLKSEL,
         .clksel_bit = MRCC_MRCC_LPUART1_CLKSEL_MUX(2),
-        .clkdiv_addr = &MRCC0->MRCC_LPUART2_CLKSEL,
+        .clkdiv_addr = &MRCC0->MRCC_LPUART1_CLKDIV,
         .clkdiv_bit = 0,
         .glb_bit0 = MRCC_MRCC_GLB_CC0_LPUART1(1),
         .glb_bit1 = MRCC_MRCC_GLB_CC0_PORT2(1),
@@ -60,7 +60,7 @@ static const struct init_entry init_table[] = {
     {
         .clksel_addr = &MRCC0->MRCC_LPUART2_CLKSEL,
         .clksel_bit = MRCC_MRCC_LPUART2_CLKSEL_MUX(2),
-        .clkdiv_addr = &MRCC0->MRCC_LPUART2_CLKSEL,
+        .clkdiv_addr = &MRCC0->MRCC_LPUART2_CLKDIV,
         .clkdiv_bit = 0,
         .glb_bit0 = MRCC_MRCC_GLB_CC0_LPUART2(1),
         .glb_bit1 = MRCC_MRCC_GLB_CC0_PORT1(1),
@@ -75,21 +75,23 @@ static const struct init_entry init_table[] = {
 
 static int lpuart_init(volatile void* addr)
 {
-    int instance = 0;
+    int instance = -1;
     for (int i = 0; i < 3; i++) {
         if (init_addr_table[i] == addr) {
-            i = instance;
+            instance = i;
             break;
         }
     }
-    if (!instance) return -1;
+	
+    if (instance == -1) return -1;
     const struct init_entry* data = &init_table[instance];
-    
+
     *data->clksel_addr = data->clksel_bit;
     *data->clkdiv_addr = data->clkdiv_bit;
 
     MRCC0->MRCC_GLB_CC0_SET = data->glb_bit0;
     MRCC0->MRCC_GLB_CC0_SET = data->glb_bit1;
+
     
     MRCC0->MRCC_GLB_RST0_SET = data->rst_bit0;
     MRCC0->MRCC_GLB_RST0_SET = data->rst_bit1;
@@ -133,7 +135,7 @@ void usart_mcxa_init(struct usart_device* usart, const struct mmio_bus_desc* des
     NVIC_ClearPendingIRQ(desc->irq);
     NVIC_EnableIRQ(desc->irq);
 
-    lpuart->BAUD = LPUART_BAUD_OSR(0b01111) | LPUART_BAUD_SBR(CLK_FRO_48MHZ / (usart_baud_rates[9]*16));
+    lpuart->BAUD = LPUART_BAUD_OSR(0b01111) | LPUART_BAUD_SBR(CLK_FRO_48MHZ / (usart_baud_rates[10]*16));
     lpuart->CTRL |= LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK | LPUART_CTRL_RIE_MASK;
 }
 

@@ -23,16 +23,20 @@ const int usart_baud_rates[11] = {
 
 
 static const struct usart_impl impl[2] = {
-    {
+#ifdef USART_DRIVER_MCXA
+    [USART_MCXA] = {
         .init = usart_mcxa_init,
         .ll_read = usart_mcxa_read,
         .ll_write = usart_mcxa_write
     },
-    {
+#endif
+#ifdef USART_DRIVER_LPC55S69
+    [USART_LPC55S69] = {
         .init = usart_lpc55s69_init,
         .ll_read = usart_lpc55s69_read,
         .ll_write = usart_lpc55s69_write
     }
+#endif
 };
 
 static struct dev_ops usart_ops = {
