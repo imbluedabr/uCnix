@@ -1,6 +1,8 @@
 #pragma once
 #include <fs/vfs.h>
 
+#define BLOCK_SIZE 512
+
 struct ucfs_superblock {
     char magic[8];
     uint16_t block_size; //in bytes
@@ -25,11 +27,11 @@ struct ucfs_file {
 
 struct ucfs_filesystem {
     struct filesystem base;
-    struct device* dev;
+    struct file dev;
     void* scratch_buffer;
     uint8_t* indirect_buffer;
-    uint8_t data_block_offset;
-    uint8_t inode_block_offset;
+    uint8_t data_block_offset; //data start offset in bytes
+    uint8_t inode_block_offset; //inode start offset in bytes
     uint8_t entries_per_dir;
 };
 
