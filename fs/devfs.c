@@ -32,7 +32,7 @@ ssize_t devfs_write(struct file* f, const char* buff, int count)
     struct inode* i = f->i;
 	struct device* dev = i->devfs.dev;
     if (dev && i->perm.mode & S_IFDEV) {
-        return dev->ops->read(f, (void*) buff, count);
+        return dev->ops->write(f, (void*) buff, count);
     }
     return -EIO;
 }

@@ -69,12 +69,15 @@ stop:
 
 void kernel_init_process()
 {
+	//mount rootfs
     kinfo("vfs: mounting rootfs on dev (%d,%d) of type (%s) on /\n", MAJOR(ROOTFS_DEVNO), MINOR(ROOTFS_DEVNO), ROOTFS_TYPE);
     int status = vfs_mount_root(ROOTFS_DEVNO, ROOTFS_TYPE, 0);
     if (status < 0) {
         kerr("vfs: rootfs mount failed! errno=%d\n", status);
         goto abort;
     }
+
+	//setup cwd
     struct inode* root_cwd = mount_table[0].root;
     struct filesystem* fs = root_cwd->fs;
     root_cwd->refcount++;
@@ -82,6 +85,7 @@ void kernel_init_process()
     kdbg("vfs: rootfs: block_count=%d, block_size=%d, block_used=%d\n", fs->block_count, fs->block_size, fs->block_used);
     
 
+	//mount devfs
     kinfo("vfs: mounting devfs on /dev\n");
     status = vfs_mount_dev("/dev", "devfs", 0);
     if (status < 0) {
@@ -89,16 +93,18 @@ void kernel_init_process()
         goto abort;
     }
 
-    
+    //create simple device nodes
     struct filesystem* devfs = mount_table[1].root->fs;
     devfs->fops->mknod(devfs, "tty0", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 0));
     devfs->fops->mknod(devfs, "tty1", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 1));
     
 
+	//create stdio file descriptors
 	int stdin = vfs_open("/dev/tty0", O_RDWR);
     int stdout = vfs_fcntl(stdin, F_DUPFD, 0);
     int stderr = vfs_fcntl(stdin, F_DUPFD, 0);    
     
+	//pass these fd's to the init process
     fd_set fd_list;
     FD_ZERO(fd_list);
     FD_SET(stdin, fd_list);
@@ -106,6 +112,7 @@ void kernel_init_process()
     FD_SET(stderr, fd_list);
     kinfo("init: starting userspace init\n");
 
+	//spawn init process
     status = sys_spawn(INIT_PATH, &fd_list, NULL);
     if (status < 0) {
         kerr("init: sys_spawn failed with %d\n", status);

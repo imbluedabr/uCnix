@@ -524,7 +524,6 @@ ssize_t vfs_readdir(int fd, struct dirent* buf, size_t count)
     }
 
     //check if it is a directory or nah
-	kdbg("ftype: %d\n", FS_GET_FTYPE(f->i->perm));
     if (FS_GET_FTYPE(f->i->perm) != S_IFDIR) {
         return -ENOTDIR;
     }
