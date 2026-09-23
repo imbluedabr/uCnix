@@ -9,4 +9,5 @@ staging/*
 *.dump.old
 *.map
 *.su
+*.swp
 .cache
