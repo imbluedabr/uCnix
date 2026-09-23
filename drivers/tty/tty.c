@@ -73,7 +73,7 @@ int tty_ioctl(struct file* f, int cmd, void* arg) {
 static inline void writeb(struct tty_device* tty, char c)
 {
     if (tty->mode.o_flag & ONLRET && c == '\n') {
-        while(tty->writer->ops->ll_write(tty->writer, "\r", 1));
+        while(tty->writer->ops->ll_write(tty->writer, "\r", 1) < 0);
     }
     while(tty->writer->ops->ll_write(tty->writer, &c, 1) < 0);
 }
@@ -93,9 +93,10 @@ ssize_t tty_read(struct file* f, void* buff, size_t count)
     while (i < count) {
         char c;
         while (reader->ops->ll_read(reader, &c, 1) < 0);
-        
+		if (c == '\r') c = '\n';
         writeb(tty, c);
-        if (c == '\r' || c == '\n') {
+
+		if (c == '\n') {
             cbuff[i++] = '\n';
             break;
         } else if (c == '\b') {
