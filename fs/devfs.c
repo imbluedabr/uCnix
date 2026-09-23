@@ -1,3 +1,5 @@
+#include "fs/vfs.h"
+#include "kernel/device.h"
 #include <fs/devfs.h>
 #include <lib/kmalloc.h>
 #include <lib/stdlib.h>
@@ -21,7 +23,7 @@ ssize_t devfs_read(struct file* f, char* buff, int count)
 {
     struct inode* i = f->i;
 	struct device* dev = i->devfs.dev;
-    if (dev && i->perm.mode & S_IFDEV) {
+    if (dev && FS_GET_FTYPE(i->perm) == S_IFDEV) {
         return dev->ops->read(f, buff, count);
     }
     return -EIO;
@@ -31,7 +33,7 @@ ssize_t devfs_write(struct file* f, const char* buff, int count)
 {
     struct inode* i = f->i;
 	struct device* dev = i->devfs.dev;
-    if (dev && i->perm.mode & S_IFDEV) {
+    if (dev && FS_GET_FTYPE(i->perm) == S_IFDEV) {
         return dev->ops->write(f, (void*) buff, count);
     }
     return -EIO;
@@ -42,7 +44,7 @@ static inline void mkden(struct dirent* buff, int d_count, ino_t ino, const char
     d->d_ino = ino;
     d->d_namelen = strnlen(name, FS_INAME_LEN);
     d->d_offset = d_count;
-    strlcpy(d->d_name, name, FS_INAME_LEN);
+    strlcpy(d->d_name, name, 9);
 }
 
 int devfs_readdir(struct file* f, struct dirent* buff, int count)
@@ -54,13 +56,13 @@ int devfs_readdir(struct file* f, struct dirent* buff, int count)
     int d_count = 0;
 
     if (offset == 1 && count > 0) {
-        mkden(buff, d_count++, FS_MAKE_UNO(devfs->base.fsid, 255), "..");
+        mkden(buff, d_count++, FS_MAKE_UNO(devfs->base.fsid, MKDEV(255, 0)), "..");
         if (d_count == count) return d_count;
     }
 
     for (int i = 0; i < 16; i++) {
         struct devfs_file* d = &devfs->files[i];
-        if (d->devno != 255) {
+        if (d->devno != MKDEV(255, 255)) {
             if (curr_offset >= offset) {
                 mkden(buff, d_count++, FS_MAKE_UNO(devfs->base.fsid, i), d->name);
             }
@@ -76,14 +78,10 @@ int devfs_readdir(struct file* f, struct dirent* buff, int count)
 int devfs_fstat(struct file* f, struct stat* statbuf)
 {
     struct inode* node = f->i;
-    struct devfs_filesystem* devfs = (struct devfs_filesystem*) node->fs;
-
-    uint32_t index = FS_GET_INO(node->ino);
-    if (index < 16) {
-        struct devfs_file* d = &devfs->files[index];
-        statbuf->st_rdev = d->devno;
-    }
+    //struct devfs_filesystem* devfs = (struct devfs_filesystem*) node->fs;
     
+	statbuf->st_rdev = FS_GET_INO(node->ino);
+   
     statbuf->st_dev = 0;
     statbuf->st_ino = node->ino;
     statbuf->st_mode = node->perm.mode;
@@ -110,10 +108,10 @@ int devfs_mount(struct mount* mountpoint, dev_t devno, int mountflags)
     devfs->base.fsid = vfs_get_fsid();
 
     for (int i = 0; i < 16; i++) {
-        devfs->files[i].devno = 255;
+        devfs->files[i].devno = MKDEV(255, 255);
     }
     kdbg("devfs: creating root inode\n");
-    mountpoint->root = devfs_read_i(&devfs->base, FS_MAKE_UNO(devfs->base.fsid, 255));
+    mountpoint->root = devfs_read_i(&devfs->base, FS_MAKE_UNO(devfs->base.fsid, MKDEV(255, 0)));
     if (mountpoint->root == NULL) {
         kfree(devfs);
         return -EIO;
@@ -129,7 +127,7 @@ int devfs_mknod(struct filesystem* fs, const char* name, struct permissions perm
     FS_SET_FTYPE(perm, S_IFDEV);
     for (int i = 0; i < 16; i++) {
         struct devfs_file* f = &devfs->files[i];
-        if (f->devno == 255) {
+        if (f->devno == MKDEV(255,255)) {
             kinfo("devfs: creating handle (%s) with acces mode 0%o\n", name, perm.mode);
             f->perm = perm;
             f->devno = devno;
@@ -151,37 +149,48 @@ ino_t devfs_lookup(struct inode* dir, const char* name)
     struct devfs_filesystem* devfs = (struct devfs_filesystem*) dir->fs;
     
     if (strncmp(name, "..", FS_INAME_LEN) == 0) {
-        return FS_MAKE_UNO(devfs->base.fsid, 255);
+        return FS_MAKE_UNO(devfs->base.fsid, MKDEV(255, 0));
     }
 
     for (int i = 0; i < 16; i++) {
         struct devfs_file* f = &devfs->files[i];
-        if (strncmp(f->name, name, FS_INAME_LEN) == 0 && f->devno != 255) {
-            return FS_MAKE_UNO(devfs->base.fsid, i);
+        if (strncmp(f->name, name, 10) == 0 && f->devno != MKDEV(255, 255)) {
+            return FS_MAKE_UNO(devfs->base.fsid, f->devno);
         }
     }
     return -ENOENT;
+}
+
+static struct devfs_file* get_file(struct devfs_filesystem* fs, dev_t devno)
+{
+	for (int i = 0; i < 16; i++) {
+		struct devfs_file* f = &fs->files[i];
+		if (f->devno == devno) return f;
+	}
+	return NULL;
 }
 
 struct inode* devfs_read_i(struct filesystem* fs, ino_t ino) //read an inode
 {
     struct devfs_filesystem* devfs = (struct devfs_filesystem*) fs;
     
-    uint32_t index = FS_GET_INO(ino);
+    uint32_t devno = FS_GET_INO(ino);
     struct inode* newi = inode_alloc();
     if (!newi) return NULL;
     newi->fs = fs;
     newi->ino = ino;
     newi->size = 0;
+
+	struct device* dev = device_lookup(devno);
     
-    if (index == 255) {
+    if (devno == MKDEV(255, 0)) {
         newi->perm.mode = 020755;
         newi->size = sizeof(devfs->files);
-    } else if (index < 16) {
-        struct devfs_file* f = &devfs->files[index];
-        if (f->devno == 255) goto error;
+    } else if (dev) {
+        struct devfs_file* f = get_file(devfs, devno);
+        if (f->devno == MKDEV(255, 255)) goto error;
         newi->perm = f->perm;
-        newi->devfs.dev = device_lookup(f->devno);
+        newi->devfs.dev = dev;
     } else {
         goto error;
     }

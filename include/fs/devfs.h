@@ -2,7 +2,7 @@
 #include <fs/vfs.h>
 
 struct devfs_file {
-    char name[FS_INAME_LEN + 1];
+    char name[10];
     dev_t devno;
     struct permissions perm;
 };
