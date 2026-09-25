@@ -1,12 +1,9 @@
-ROOT ?= $(PWD)
-
-BUILD = $(ROOT)/build
 
 CONFIG ?= .config
 
 -include $(CONFIG)
 
-SETTINGS_FILE = $(ROOT)/include/kernel/settings.h
+SETTINGS_FILE = ./include/kernel/settings.h
 
 $(shell echo "#define ROOTFS_DEVNO (($(CONFIG_ROOTFS_DEV_MAJOR) << 8) | $(CONFIG_ROOTFS_DEV_MINOR))" > $(SETTINGS_FILE))
 $(shell echo "#define ROOTFS_TYPE \"$(CONFIG_ROOTFS_TYPE)\"" >> $(SETTINGS_FILE))
@@ -39,6 +36,10 @@ ARCH_LDFLAGS = -mthumb -mcpu=cortex-m33
 $(shell echo "#define BOARD_LPC55S69" >> $(SETTINGS_FILE))
 endif
 
+
+BUILD = ./build
+SYSROOT ?= ./sysroot
+HDR_INSTALL_DIR ?= $(SYSROOT)/usr/include/$(ARCH)
 
 
 $(shell echo "#define BOARD_ARCH \"$(ARCH)\"" >> $(SETTINGS_FILE))
@@ -107,10 +108,10 @@ ASRCS = $(wildcard arch/$(ARCH)/*.S) \
 		$(wildcard board/$(BOARD)/*.S)
 
 #include options
-INCL ?= -I$(ROOT)/include -isystem $(shell $(CC) -print-file-name=include)
+INCL ?= -I./include -isystem $(shell $(CC) -print-file-name=include)
 
 #linker file
-LNKF = $(ROOT)/board/$(BOARD)/linker.ld
+LNKF = ./board/$(BOARD)/linker.ld
 
 # link path options
 LNKP ?=
@@ -139,12 +140,12 @@ CFLAGS += -flto
 LDFLAGS += -flto
 endif
 
-OBJS = $(patsubst %.c,$(BUILD)/%.o,$(CSRCS)) $(patsubst %.S,$(BUILD)/%.o,$(ASRCS)) rootfs.o
+OBJS = $(patsubst %.c,$(BUILD)/%.o,$(CSRCS)) $(patsubst %.S,$(BUILD)/%.o,$(ASRCS))
 CC = $(TOOLCHAIN)-gcc 
 OBJCOPY = $(TOOLCHAIN)-objcopy
 READELF = $(TOOLCHAIN)-readelf
 
-.PHONY: userspace install tools rootfs.bin
+.PHONY: kernel install clean
 
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -154,30 +155,21 @@ $(BUILD)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(CC) $(ASFLAGS) -c $< -o $@
 
-userspace:
-	$(MAKE) -C $(ROOT)/userspace all
-
-rootfs.bin: userspace
-	$(ROOT)/tools/mkfs.elf -b 32 -c $(ROOT)/staging rootfs.bin
-
-rootfs.o: rootfs.bin
-	$(OBJCOPY) -I binary -O elf32-littlearm -B arm rootfs.bin rootfs.o
 
 $(MN_FILE): $(OBJS)
 	$(CC) $(LDFLAGS) -T $(LNKF) $(OBJS) -o $@
 
-image: $(MN_FILE)
-	$(OBJCOPY) -O binary $(MN_FILE) image.bin
-	$(TOOLCHAIN)-readelf -S $(MN_FILE)
+kernel: $(MN_FILE)
 
-tools:
-	$(MAKE) -C $(ROOT)/tools all
+install:
+	mkdir -p $(HDR_INSTALL_DIR)
+	cp -r ./include/uapi/* $(HDR_INSTALL_DIR)
+	cp $(MN_FILE) $(SYSROOT)
 
-dump:
-	$(TOOLCHAIN)-objdump -d -M no-aliases $(MN_FILE) >> dump.s.dump
-	$(TOOLCHAIN)-objdump -S -d -M no-aliases $(MN_FILE) >> verbose_dump.s.dump
+uninstall:
+	rm -r $(HDR_INSTALL_DIR)/*
+	rm $(SYSROOT)/$(MN_FILE)
 
 clean:
-	rm -rf $(BUILD) rootfs.o *.bin
-	$(MAKE) -C $(ROOT)/userspace clean
+	rm -rf $(BUILD) $(MN_FILE)
 

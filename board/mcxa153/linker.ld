@@ -33,13 +33,12 @@ SECTIONS
     . = ALIGN(4);
   } > m_flash
 
-  .rootfs :
+  .rootfs (NOLOAD) :
   {
     . = ALIGN(4);
     __rootfs_start = .;
-    KEEP(rootfs.o(.data))
+	. += 64K;
     __rootfs_end = .;
-    . = ALIGN(4);
   } > m_flash
   
   __DATA_ROM = .;
