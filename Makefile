@@ -39,7 +39,7 @@ endif
 
 BUILD = ./build
 SYSROOT ?= ./sysroot
-HDR_INSTALL_DIR ?= $(SYSROOT)/usr/include/$(ARCH)
+HDR_INSTALL_DIR ?= $(SYSROOT)/include/$(ARCH)
 
 
 $(shell echo "#define BOARD_ARCH \"$(ARCH)\"" >> $(SETTINGS_FILE))
@@ -116,7 +116,7 @@ LNKF = ./board/$(BOARD)/linker.ld
 # link path options
 LNKP ?=
 
-MN_FILE ?= kernel.elf
+MN_FILE ?= kernel
 
 CFLAGS = $(ARCH_CFLAGS) -fstack-usage -ffreestanding -nostdinc -Wall -Wextra -Wno-unused-parameter  $(INCL)
 ASFLAGS = $(CFLAGS)
@@ -156,20 +156,22 @@ $(BUILD)/%.o: %.S
 	$(CC) $(ASFLAGS) -c $< -o $@
 
 
-$(MN_FILE): $(OBJS)
+$(MN_FILE).elf: $(OBJS)
 	$(CC) $(LDFLAGS) -T $(LNKF) $(OBJS) -o $@
+	$(OBJCOPY) -O binary $@ $(MN_FILE).bin
 
-kernel: $(MN_FILE)
+kernel: $(MN_FILE).elf
 
 install:
 	mkdir -p $(HDR_INSTALL_DIR)
 	cp -r ./include/uapi/* $(HDR_INSTALL_DIR)
-	cp $(MN_FILE) $(SYSROOT)
+	cp $(MN_FILE).elf $(SYSROOT)
+	cp $(MN_FILE).bin $(SYSROOT)
 
 uninstall:
 	rm -r $(HDR_INSTALL_DIR)/*
 	rm $(SYSROOT)/$(MN_FILE)
 
 clean:
-	rm -rf $(BUILD) $(MN_FILE)
+	rm -rf $(BUILD) $(MN_FILE).elf $(MN_FILE).bin
 
