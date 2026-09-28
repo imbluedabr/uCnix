@@ -33,15 +33,17 @@ SECTIONS
     . = ALIGN(4);
   } > m_flash
 
-  .rootfs (NOLOAD) :
+  __DATA_ROM = .;
+
+  __DATA_ROM_END = LOADADDR(.data) + SIZEOF(.data);
+  .rootfs __DATA_ROM_END (NOLOAD) :
   {
     . = ALIGN(4);
     __rootfs_start = .;
 	. += 64K;
     __rootfs_end = .;
   } > m_flash
-  
-  __DATA_ROM = .;
+
 
   .bss :
   {

@@ -39,7 +39,7 @@ struct device* romdisk_probe(struct bus_device* parent, const void* descriptor)
     dev->conf = *desc;
     uint32_t block_count = size/ROMDISK_BLK_SECSZ;
 
-    kdbg("romdsk: BLK_NSEC=%d, BLK_SECSZ=%d, BLK_SZ=%d\n", block_count, ROMDISK_BLK_SECSZ, size);
+    kdbg("romdsk: BASE=0x%x, BLK_NSEC=%d\n", desc->base, block_count);
     return &dev->base;
 }
 
