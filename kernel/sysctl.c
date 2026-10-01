@@ -20,7 +20,7 @@ int sys_sysctl(int cmd, void* buffer, int count)
             pbuff[i].ruid = p->credentials.ruid;
             pbuff[i].rgid = p->credentials.rgid;
             pbuff[i].state = p->state;
-            if (i++ > count) break;
+            if (++i > count) break;
             p = p->next;
         }
         mutex_unlock(&proc_acces_lock);
