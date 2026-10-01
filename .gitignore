@@ -1,5 +1,6 @@
 build
 staging/*
+include/kernel/settings.h
 *.o
 *.elf
 *.bin
