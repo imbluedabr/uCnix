@@ -26,47 +26,6 @@
 #include <uapi/sys/dir.h>
 #include <uapi/signal.h>
 
-void kernel_worker_process()
-{
-    kinfo("init: kernel worker started\n");
-    time_t last = get_kernel_ticks();
-    while (1) {
-        if ((get_kernel_ticks() - last) > 1000) {
-            last = get_kernel_ticks();
-            system_blink();
-
-        }
-        if (current_process->exit_code != 0) {
-            proc_stop_scheduling();
-            struct proc* p = proc_active_list;
-            while(p) {
-                if (p->state == PROC_ZOMBIE && p->ppid == 0) {
-                    proc_reap(p);
-                    if (p->pid == 1) goto stop;
-                    break;
-                }
-                p = p->next;
-            }
-            current_process->exit_code = 0;
-            proc_restart_scheduling();
-        }
-    }
-
-stop:
-    kerr("init process exited!\n");
-    struct memstat buff;
-    heap_stat(&kernel_allocator, &buff);
-    kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
-    
-    inode_stat();
-
-    kinfo("halting kernel...\n");
-    //proc_stop_scheduling();
-    while (1) {
-        __WFI();
-    }
-}
-
 void kernel_init_process()
 {
 	//mount rootfs
@@ -118,23 +77,45 @@ void kernel_init_process()
         kerr("init: sys_spawn failed with %d\n", status);
         goto abort;
     }
-    
-    
-    //reparent userspace init
-    
-    int irq = disable_interrupts();
-    struct proc* p = proc_get_process(2);
-    if (!p) goto abort;
-    p->pid = 1;
-    p->ppid = 0;
-    current_process->pid = proc_pid_alloc();
-    current_process->ppid = 0;
-    proc_pid_free(2);
-    enable_interrupts(irq);
-    proc_kill(1, SIGCONT);
-	
+        
+    proc_kill(status, SIGCONT);
+
+	time_t last = get_kernel_ticks();
+    while (1) {
+        if ((get_kernel_ticks() - last) > 1000) {
+            last = get_kernel_ticks();
+            system_blink();
+
+        }
+        if (current_process->exit_code != 0) {
+            proc_stop_scheduling();
+            struct proc* p = proc_active_list;
+            while(p) {
+                if (p->state == PROC_ZOMBIE && p->ppid == 0) {
+                    proc_reap(p);
+                    if (p->pid == 1) goto abort;
+                    break;
+                }
+                p = p->next;
+            }
+            current_process->exit_code = 0;
+            proc_restart_scheduling();
+        }
+    }
+
 abort:
-    proc_mark_zombie(current_process, 0);
+    kerr("init process exited!\n");
+    struct memstat buff;
+    heap_stat(&kernel_allocator, &buff);
+    kdbg("heap: blocks_used=%d, blocks_total=%d, bytes_used=%d, bytes_total=%d, frag=%d\n", buff.blocks_used, buff.blocks_total, buff.bytes_used, buff.bytes_total, buff.fragmentation);
+    
+    inode_stat();
+
+    kinfo("halting kernel...\n");
+    //proc_stop_scheduling();
+    while (1) {
+        __WFI();
+    }	
 }
 
 void kernel_pre_init()
@@ -164,12 +145,6 @@ void kernel_pre_init()
 #endif
 }
 
-const process_desc_t kernel_worker_proc = {
-    .entry_point = &kernel_worker_process,
-    .argv = NULL,
-    .stopped = 0,
-    .kernel_mode = 1
-};
 const process_desc_t kernel_init_proc = {
     .entry_point = &kernel_init_process,
     .argv = NULL,
@@ -200,11 +175,8 @@ const process_desc_t kernel_init_proc = {
 	
 	tty_create(MKDEV(USART_MAJOR, 1), MKDEV(USART_MAJOR, 1), &settings);
     
-    kinfo("init: starting kernel worker\n");
-    struct proc* p = proc_create(&kernel_worker_proc);
-    p->sigmask = 1 << SIGCHLD;
     kinfo("init: starting kernel init\n");
-    p = proc_create(&kernel_init_proc);
+    struct proc* p = proc_create(&kernel_init_proc);
     p->sigmask = (1 << SIGCHLD) | (1 << SIGCONT); //enable sigchld signal
     p->credentials.euid = 0;
     proc_start_scheduling();
