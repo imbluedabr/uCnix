@@ -162,7 +162,8 @@ const process_desc_t kernel_init_proc = {
 	};
 	//create boot console tty
 	tty_create(INIT_CONSOLE_RDEV, INIT_CONSOLE_WDEV, &settings);
-    
+    tty_create(MKDEV(USART_MAJOR, 1), MKDEV(USART_MAJOR, 1), &settings);
+
 	idapi_opendev(&boot_console, MKDEV(TTY_MAJOR, 0), 0); //tty0
 
     kprintf("\e[1;35m%s %s %s %s %s\n\e[1;39m", local_uname.sysname, local_uname.nodename, local_uname.release, local_uname.version, local_uname.machine);

@@ -1,3 +1,4 @@
+#include "kernel/device.h"
 #include <stddef.h>
 #include <kernel/board.h>
 #include <kernel/majors.h>
@@ -6,6 +7,7 @@
 
 #include <drivers/usart.h>
 #include <drivers/romdisk.h>
+#include <stdint.h>
 
 extern const uint8_t __rootfs_start[];
 extern const uint8_t __rootfs_end[];
@@ -24,10 +26,19 @@ const dt_node_t static_device_tree = {
 	.next = &(dt_node_t) {
 		.preinit = 0,
 		.desc = &(struct mmio_bus_desc) {
+			.base = (uint8_t*) LPUART1,
+			.vendor_id = USART_MCXA,
+			.major = USART_MAJOR,
+			.irq = LPUART1_IRQn
+		},
+	.next = &(dt_node_t) {
+		.preinit = 0,
+		.desc = &(struct mmio_bus_desc) {
 			.base = __rootfs_start,
 			.size = (size_t) __rootfs_end,
 			.major = ROMDISK_MAJOR
 		}
+	}
 	}
 	}
 };
