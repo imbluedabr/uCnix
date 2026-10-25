@@ -1,4 +1,5 @@
 #pragma once
+#include "uapi/sys/i2c.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <uapi/sys/types.h>
@@ -12,7 +13,8 @@ enum bus_types : uint8_t {
     BUS_MMIO,
     BUS_I2C,
     BUS_SPI,
-    BUS_UART
+    BUS_UART,
+	BUS_GPIO
 };
 
 //bus device descriptors, contains info about the location and type of the device on the bus
@@ -27,6 +29,12 @@ struct mmio_bus_desc {
 struct i2c_bus_desc {
     uint8_t major;
     uint8_t address;
+};
+
+struct gpio_bus_desc {
+	uint32_t pin_mask;
+	uint16_t vendor_id;
+	uint8_t major;
 };
 
 struct device_driver {
@@ -73,19 +81,17 @@ struct bus_ops {
     struct device* (*probe)(struct bus_device* bus, const void* desc);
 
     //i2c
-    int (*i2c_tx)(struct bus_device* bus, uint8_t addr, uint8_t* buff, int count);
-    int (*i2c_rx)(struct bus_device* bus, uint8_t addr, uint8_t* buff, int count);
+    int (*i2c_rdwr)(struct bus_device* bus, struct i2c_rdwr_ioctl_data* data);
 
     //uart
     int (*uart_tx)(struct bus_device* bus, uint8_t* buff, int count);
     int (*uart_rx)(struct bus_device* bus, uint8_t* buff, int count);
     
     //gpio
-    int (*gpio_mode_set)(struct bus_device* bus, int mask);
-    int (*gpio_mode_clr)(struct bus_device* bus, int mask);
-    int (*gpio_port_set)(struct bus_device* bus, int mask);
-    int (*gpio_port_clr)(struct bus_device* bus, int mask);
-    int (*gpio_port_get)(struct bus_device* bus, int* buff);
+    int (*gpio_range_claim)(struct bus_device* bus, int mask, int mode); //claim all the pins in the mask
+    int (*gpio_range_write)(struct bus_device* bus, int mask, int value); //write each pin in the mask with the bit in the value
+    int (*gpio_range_read)(struct bus_device* bus, int mask); //read all the pins in the mask
+    int (*gpio_range_unclaim)(struct bus_device* bus, int mask); //unclaim the pins in the mask
 };
 
 struct bus_device {
