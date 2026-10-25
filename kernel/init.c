@@ -19,6 +19,8 @@
 #include <drivers/hd44xxx.h>
 #include <drivers/romdisk.h>
 #include <drivers/usart.h>
+#include <drivers/gpio.h>
+#include <drivers/i2c.h>
 #include <lib/kmalloc.h>
 #include <lib/stdlib.h>
 #include <uapi/sys/fcntl.h>
@@ -54,8 +56,17 @@ void kernel_init_process()
 
     //create simple device nodes
     struct filesystem* devfs = mount_table[1].root->fs;
-    devfs->fops->mknod(devfs, "tty0", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 0));
-    devfs->fops->mknod(devfs, "tty1", FS_MAKE_PERM(0, 0, 0666), MKDEV(TTY_MAJOR, 1));
+	for (int i = 0; i < DRIVER_TABLE_LEN; i++) {
+		struct device_driver* drv = driver_table[i];
+		if (drv) {
+			for (struct device* dev = drv->instances; dev; dev = dev->next) {
+				char dev_name[12] = {0};
+				int offset = strncpy(dev_name, drv->name, 12);
+				dev_name[offset] = '0' + dev->minor;
+			    devfs->fops->mknod(devfs, dev_name, FS_MAKE_PERM(0, 0, 0666), MKDEV(i, dev->minor));
+			}
+		}
+	}
     
 
 	//create stdio file descriptors
@@ -143,6 +154,12 @@ void kernel_pre_init()
 #ifdef TTY_DRIVER
     tty_init();
 #endif
+#ifdef GPIO_DRIVER
+	gpio_init();
+#endif
+#ifdef I2C_DRIVER
+	i2c_init();
+#endif
 }
 
 const process_desc_t kernel_init_proc = {
@@ -173,9 +190,7 @@ const process_desc_t kernel_init_proc = {
     kinfo("user memory: %d KiB, base address: 0x%x\n", buff.bytes_total/1024, userspace_allocator.block_base);
 
     devtbl_init(&static_device_tree);
-	
-	tty_create(MKDEV(USART_MAJOR, 1), MKDEV(USART_MAJOR, 1), &settings);
-    
+	    
     kinfo("init: starting kernel init\n");
     struct proc* p = proc_create(&kernel_init_proc);
     p->sigmask = (1 << SIGCHLD) | (1 << SIGCONT); //enable sigchld signal
