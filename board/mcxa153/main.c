@@ -34,10 +34,24 @@ const dt_node_t static_device_tree = {
 	.next = &(dt_node_t) {
 		.preinit = 0,
 		.desc = &(struct mmio_bus_desc) {
-			.base = __rootfs_start,
+			.base = (uint8_t*) __rootfs_start,
 			.size = (size_t) __rootfs_end,
 			.major = ROMDISK_MAJOR
+		},
+	.next = &(dt_node_t) {
+		.preinit = 0,
+		.desc = &(struct mmio_bus_desc) {
+			.base = (uint8_t*) GPIO3,
+			.major = GPIO_MAJOR
+		},
+	.next = &(dt_node_t) {
+		.preinit = 0,
+		.desc = &(struct mmio_bus_desc) {
+			.base = (uint8_t*) LPI2C0,
+			.major = I2C_MAJOR
 		}
+	}
+	}
 	}
 	}
 	}
