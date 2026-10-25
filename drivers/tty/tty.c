@@ -94,6 +94,7 @@ ssize_t tty_read(struct file* f, void* buff, size_t count)
         char c;
         while (reader->ops->ll_read(reader, &c, 1) < 0);
 		if (c == '\r') c = '\n';
+        if (c == 0x7F) c = '\b';
         writeb(tty, c);
 
 		if (c == '\n') {
@@ -102,7 +103,7 @@ ssize_t tty_read(struct file* f, void* buff, size_t count)
         } else if (c == '\b') {
             writeb(tty, ' ');
             writeb(tty, '\b');
-            cbuff[--i] = ' ';
+            cbuff[--i] = '\0';
         } else if (c == 0x04) {
             break;
         } else {
