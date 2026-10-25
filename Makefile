@@ -66,20 +66,19 @@ $(shell echo "#define ROMDISK_DRIVER" >> $(SETTINGS_FILE))
 endif
 
 ifeq ($(CONFIG_USART_DRIVER), y)
-DEV_SELECT += drivers/usart/usart.c
+DEV_SELECT += drivers/usart/$(BOARD)_usart.c
 $(shell echo "#define USART_DRIVER" >> $(SETTINGS_FILE))
 endif
-ifeq ($(CONFIG_USART_DRIVER_MCXA), y)
-DEV_SELECT += drivers/usart/mcxa.c
-$(shell echo "#define USART_DRIVER_MCXA" >> $(SETTINGS_FILE))
-endif
-ifeq ($(CONFIG_USART_DRIVER_LPC55S69), y)
-DEV_SELECT += drivers/usart/lpc55s69.c
-$(shell echo "#define USART_DRIVER_LPC55S69" >> $(SETTINGS_FILE))
+
+ifeq ($(CONFIG_GPIO_DRIVER), y)
+DEV_SELECT += drivers/gpio/$(BOARD)_gpio.c
+$(shell echo "#define GPIO_DRIVER" >> $(SETTINGS_FILE))
 endif
 
-
-
+ifeq ($(CONFIG_I2C_DRIVER), y)
+DEV_SELECT += drivers/i2c/$(BOARD)_i2c.c
+$(shell echo "#define I2C_DRIVER" >> $(SETTINGS_FILE))
+endif
 
 ifeq ($(CONFIG_HD44XXX_DRIVER), y)
 DEV_SELECT += drivers/hd44xxx/hd44xxx.c
