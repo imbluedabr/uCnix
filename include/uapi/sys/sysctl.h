@@ -21,5 +21,4 @@ struct mstat {
     size_t bytes_total;
 };
 
-int sysctl(int cmd, void* buffer, ssize_t count);
 

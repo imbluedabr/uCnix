@@ -9,6 +9,4 @@ struct dirent {
     uint8_t d_namelen;
 };
 
-int readdir(int fd, struct dirent* buf, int count);
-
 

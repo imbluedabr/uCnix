@@ -62,8 +62,8 @@
     // timer api
 #define SYS_GETITIMER 50
 #define SYS_SETITIMER 51
-#define SYS_GETTIMEOFDAY 52
-#define SYS_SETTIMEOFDAY 53
+#define SYS_CLOCK_GETTIME 52
+#define SYS_CLOCK_SETTIME 53
 #define SYS_UTIMES 54
 
     // user/group api
