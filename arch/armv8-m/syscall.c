@@ -1,3 +1,4 @@
+#include "kernel/time.h"
 #include <kernel/syscall.h>
 #include <kernel/interrupt.h>
 #include <kernel/proc.h>
@@ -9,6 +10,7 @@
 #include <board/board.h>
 #include <arch/armv8-m/proc.h>
 #include <arch/armv8-m/syscall.h>
+#include <uapi/sys/time.h>
 #include <uapi/syscalls.h>
 #include <uapi/sys/errno.h>
 #include <lib/kprint.h>
@@ -200,6 +202,11 @@ static void s_setgroups(struct exception_frame* f)
     f->caller_regs[0] = sys_setgroups(f->caller_regs[0], f->caller_regs[1], (const gid_t*) f->caller_regs[2]);
 }
 
+static void s_clock_gettime(struct exception_frame* f)
+{
+	f->caller_regs[0] = sys_clock_gettime(f->caller_regs[0], (struct timespec*) f->caller_regs[1]);
+}
+
 static void s_sysctl(struct exception_frame* f)
 {
     f->caller_regs[0] = sys_sysctl(f->caller_regs[0], (void*) f->caller_regs[1], f->caller_regs[2]);
@@ -249,6 +256,8 @@ static const syscall_t s_table[SYSCALL_COUNT] = {
     [SYS_SETREUID] = s_setreuid,
     [SYS_SETREGID] = s_setregid,
     [SYS_SETGROUPS] = s_setgroups,
+
+	[SYS_CLOCK_GETTIME] = s_clock_gettime,
 
     [SYS_SYSCTL] = s_sysctl,
     [SYS_UNAME] = s_uname
