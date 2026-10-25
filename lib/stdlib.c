@@ -41,7 +41,7 @@ int strncmp( const char * s1, const char * s2, uint32_t n )
     }
 }
 
-int strncpy(char* dest, char* src, uint32_t size)
+int strncpy(char* dest, const char* src, uint32_t size)
 {
     int i = 0;
     while((*src != '\0') && (size-- > 0)) {
