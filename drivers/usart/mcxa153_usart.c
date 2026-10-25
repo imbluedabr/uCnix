@@ -1,11 +1,37 @@
-#include "mcxa.h"
-#include <board/mcxa153/board.h>
-#include <kernel/interrupt.h>
-#include <lib/kprint.h>
 #include <drivers/usart.h>
-#include <fs/vfs.h>
-#include <uapi/sys/fcntl.h>
+#include <lib/kmalloc.h>
+#include <lib/kprint.h>
+#include <kernel/settings.h>
+#include <kernel/majors.h>
+#include <kernel/proc.h>
+#include <kernel/interrupt.h>
 #include <uapi/sys/errno.h>
+#include <board/mcxa153/board.h>
+
+const int usart_baud_rates[11] = {
+    110,
+    300,
+    1200,
+    2400,
+    4800,
+    9600,
+    19200,
+    28800,
+    38400,
+    57600,
+    115200
+};
+
+static struct dev_ops usart_ops = {
+	.ll_read = usart_read,
+	.ll_write = usart_write
+};
+
+struct device_driver usart_driver = {
+    .probe = usart_probe,
+    .name = "usart",
+    .bus_accept = BUS_MMIO
+};
 
 struct init_entry {
     volatile uint32_t* clksel_addr;
@@ -102,7 +128,7 @@ static int lpuart_init(volatile void* addr)
     return 0;
 }
 
-void usart_mcxa_interrupt()
+void usart_interrupt()
 {
     struct usart_device* usart = get_current_handler_struct();
 
@@ -126,19 +152,6 @@ void usart_mcxa_interrupt()
     }
 }
 
-void usart_mcxa_init(struct usart_device* usart, const struct mmio_bus_desc* desc)
-{
-    volatile LPUART_Type* lpuart = (volatile LPUART_Type*) desc->base;
-    lpuart_init(lpuart);
-    register_interrupt(desc->irq, usart, usart_mcxa_interrupt);
-    NVIC_SetPriority(desc->irq, 3);
-    NVIC_ClearPendingIRQ(desc->irq);
-    NVIC_EnableIRQ(desc->irq);
-
-    lpuart->BAUD = LPUART_BAUD_OSR(0b01111) | LPUART_BAUD_SBR(CLK_FRO_48MHZ / (usart_baud_rates[10]*16));
-    lpuart->CTRL |= LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK | LPUART_CTRL_RIE_MASK;
-}
-
 static inline int readb(struct usart_device* usart)
 {
     __disable_irq();
@@ -154,7 +167,7 @@ static inline int readb(struct usart_device* usart)
 }
 
 
-ssize_t usart_mcxa_read(struct device* dev, void* buff, size_t count)
+ssize_t usart_read(struct device* dev, void* buff, size_t count)
 {
     struct usart_device* usart = (struct usart_device*) dev;
     uint32_t i;
@@ -186,7 +199,7 @@ static inline int writeb(struct usart_device* usart, uint8_t val)
     return 0;
 }
 
-ssize_t usart_mcxa_write(struct device* dev, const void* buff, size_t count)
+ssize_t usart_write(struct device* dev, const void* buff, size_t count)
 {
     struct usart_device* usart = (struct usart_device*) dev;
     uint32_t i;
@@ -198,5 +211,35 @@ ssize_t usart_mcxa_write(struct device* dev, const void* buff, size_t count)
     if (!i) return -EAGAIN;
     return i;   
 }
+
+
+void usart_init()
+{
+    register_driver(USART_MAJOR, &usart_driver);
+}
+
+struct device* usart_probe(struct bus_device* parent, const void* descriptor)
+{
+    struct usart_device* dev = kzalloc(sizeof(struct usart_device));
+    if (!dev) return NULL;
+    const struct mmio_bus_desc* desc = descriptor;
+    dev->usart_base = desc->base;    
+    dev->base.ops = &usart_ops;
+
+    volatile LPUART_Type* lpuart = (volatile LPUART_Type*) desc->base;
+    lpuart_init(lpuart);
+    register_interrupt(desc->irq, dev, usart_interrupt);
+    NVIC_SetPriority(desc->irq, 3);
+    NVIC_ClearPendingIRQ(desc->irq);
+    NVIC_EnableIRQ(desc->irq);
+
+    lpuart->BAUD = LPUART_BAUD_OSR(0b01111) | LPUART_BAUD_SBR(CLK_FRO_48MHZ / (usart_baud_rates[10]*16));
+    lpuart->CTRL |= LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK | LPUART_CTRL_RIE_MASK;
+
+
+    return &dev->base;
+}
+
+
 
 
