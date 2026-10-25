@@ -1,15 +1,14 @@
 #include <drivers/hd44xxx.h>
-#include <kernel/time.h>
-#include <kernel/proc.h>
-#include <board/board.h>
 #include <kernel/majors.h>
 #include <lib/kprint.h>
 #include <lib/kmalloc.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "port.h"
+#include <stdint.h>
+#include "kernel/device.h"
 #include "st7920.h"
 #include "hd44780.h"
+#include "uapi/sys/gpio.h"
 
 static const uint8_t DDRAM_addr[][4] = {
     [HD_ST_9720] = {
@@ -61,144 +60,107 @@ static const struct hd44xxx_impl disp_impl[] = {
 };
 
 struct device_driver hd44xxx_driver = {
-    .create = hd44xxx_create,
-    .destroy = hd44xxx_destroy,
-    .ioctl = hd44xxx_ioctl,
-    .readb = hd44xxx_readb,
-    .writeb = hd44xxx_writeb,
-    .update = hd44xxx_update,
-    .instances = NULL,
+	.probe = hd44xxx_probe,
     .name = "lcd",
-    .instance_count = 0
+	.bus_accept = BUS_GPIO
 };
 
 
 void hd44xxx_init() {
-    driver_table[HD44XXX_MAJOR] = &hd44xxx_driver;
+    register_driver(HD44XXX_MAJOR, &hd44xxx_driver);
 }
 
-int hd44xxx_push_cmd(struct hd44xxx_device* disp, uint8_t rs, uint8_t val)
+#define RS_SHIFT 8
+#define RW_MASK (1 << 10)
+#define EN_MASK (1 << 9)
+
+void send_cmd(struct hd44xxx_device* display, uint8_t rs, uint8_t val) {
+	struct bus_device* bus = display->base.parent;
+	bus->bus_ops->gpio_range_write(bus, 0x7FF, (rs << RS_SHIFT) | val);
+    //tiny_delay(10);
+	bus->bus_ops->gpio_range_write(bus, EN_MASK, EN_MASK);
+    //tiny_delay(20);
+	bus->bus_ops->gpio_range_write(bus, EN_MASK, 0);
+    //tiny_delay(10);
+	bus->bus_ops->gpio_range_write(bus, 0x7FF, 0);
+}
+
+static int recieve_cmd(struct hd44xxx_device* display, uint8_t rs) {
+    uint8_t recieved;
+	struct bus_device* bus = display->base.parent;
+	bus->bus_ops->gpio_range_claim(bus, 0xFF, GPIO_PINMODE_INPUT);
+	bus->bus_ops->gpio_range_write(bus, 0x700, (rs << RS_SHIFT) | RW_MASK);
+    //tiny_delay(10);
+	bus->bus_ops->gpio_range_write(bus, EN_MASK, EN_MASK);
+    //tiny_delay(20);
+	recieved = bus->bus_ops->gpio_range_read(bus, 0xFF);
+    //tiny_delay(20);
+	bus->bus_ops->gpio_range_write(bus, 0x700, 0);
+	//tiny_delay(10);
+	bus->bus_ops->gpio_range_claim(bus, 0xFF, GPIO_PINMODE_OUTPUT);
+    return recieved;
+}
+
+static void cmd_display_clear(struct hd44xxx_device* disp)
 {
-    uint8_t tmp = (disp->cmd_head + 1) & (HD44XXX_CMD_BUFF_SIZE - 1);
-    if (tmp == disp->cmd_tail) {
-        return -1;
-    }
-    disp->cmd_head = tmp;
-    disp->cmd_buff[tmp] = (struct hd44xxx_cmd) { .data = val, .rs = rs};
-    return 0;
+    send_cmd(disp, 0, 1);
 }
 
-static int cmd_display_clear(struct hd44xxx_device* disp)
+static void cmd_set_ddram(struct hd44xxx_device* disp, uint8_t val)
 {
-    return hd44xxx_push_cmd(disp, 0, 1);
-}
-
-static int cmd_set_ddram(struct hd44xxx_device* disp, uint8_t val)
-{
-    return hd44xxx_push_cmd(disp, 0, 0x80 | (val & 0x7F));
+    send_cmd(disp, 0, 0x80 | (val & 0x7F));
 }
 
 
-struct device* hd44xxx_create(void* args)
+struct device* hd44xxx_probe(struct bus_device* parent, const void* descriptor)
 {
     struct hd44xxx_device* display = kzalloc(sizeof(struct hd44xxx_device));
     if (display == NULL) {
         return NULL;
     }
-    struct hd44xxx_desc* desc = args;
-    display->base.driver = &hd44xxx_driver;
-    display->base.impl = desc->type;
+    struct gpio_bus_desc* desc = (struct gpio_bus_desc*) descriptor;
+    display->impl = desc->vendor_id;
 
-    port_init();
-    disp_impl[desc->type].init(display, desc);
+	parent->bus_ops->gpio_range_claim(parent, 0x7FF, GPIO_PINMODE_OUTPUT);
+	display->base.parent = parent;
+	
+    disp_impl[desc->vendor_id].init(display, desc);
 
     return &display->base;
 }
 
-int hd44xxx_destroy(struct device* dev)
+int hd44xxx_ioctl(struct file* f, int cmd, void* arg)
 {
-    return -1; //not implemented yet
+    struct hd44xxx_device* disp = (struct hd44xxx_device*) f->i->devfs.dev;
+
+    return disp_impl[disp->impl].ioctl(disp, cmd, arg);
 }
 
-int hd44xxx_ioctl(struct device* dev, int cmd, void* arg) {
-    struct hd44xxx_device* disp = (struct hd44xxx_device*) dev;
-
-    if (disp->base.driver == NULL) {
-        return -1;
-    }
-    return disp_impl[disp->base.impl].ioctl(disp, cmd, arg);
-}
-
-int hd44xxx_readb(struct device* dev)
+static inline void writeb(struct hd44xxx_device* display, char c)
 {
-    return -1;
+	while (recieve_cmd(display, 0) & 0x70);
+	send_cmd(display, 1, c);
+	display->cursor_x++;
+	if (display->cursor_x == display_format[display->impl][0]) {
+		display->cursor_x = 0;
+		display->cursor_y++;
+		cmd_set_ddram(display, DDRAM_addr[display->impl][display->cursor_y]);
+	}
+	if (display->cursor_y == display_format[display->impl][1]) {
+		display->cursor_y = 0;
+		cmd_display_clear(display);
+	}
 }
 
-int hd44xxx_writeb(struct device* dev, char val)
-{
-    struct hd44xxx_device* disp = (struct hd44xxx_device*) dev;
-    if (disp->newl_pending) {
-        uint8_t tmp = disp->cursor_y + 1;
-        if (cmd_set_ddram(disp, DDRAM_addr[disp->base.impl][tmp]) == -1) { return -1; };
-        disp->cursor_x = 0;
-        disp->cursor_y = tmp;
-        disp->newl_pending = 0;
-    }
-    
-    if (disp->cursor_y >= display_format[disp->base.impl][1]) {
-        if (cmd_display_clear(disp) == -1) { return -1; };
-        disp->cursor_x = 0;
-        disp->cursor_y = 0;
-    }
-    if (val == '\n') {
-        disp->newl_pending = 1;
-    } else if (val == '\b') {
-        disp->cursor_x--;
-    } else {
-        if (hd44xxx_push_cmd(disp, 1, val) == -1) { return -1; };
-        disp->cursor_x++;
-    }
-    if (disp->cursor_x >= display_format[disp->base.impl][0]) {
-        disp->newl_pending = 1;
-    }
-    return 0;
-}
-
-void hd44xxx_update(struct device* dev)
+int hd44xxx_ll_write(struct device* dev, const void* buff, size_t count)
 {
     struct hd44xxx_device* disp = (struct hd44xxx_device*) dev;
-    uint8_t status = read_port(disp, 0);
+	
+	for (size_t i = 0; i < count; i++) {
+		writeb(disp, ((char*)buff)[i]);
+	}
 
-    if (!(status & 0x80)) {
-
-        if (disp->cmd_head != disp->cmd_tail) {
-            uint8_t tmp = (disp->cmd_tail + 1) & (HD44XXX_CMD_BUFF_SIZE - 1);
-            disp->cmd_tail = tmp;
-            struct hd44xxx_cmd* cmd = &disp->cmd_buff[tmp];
-            write_port(disp, cmd->rs, cmd->data);
-        }
-    }
-
-    struct io_request* req = device_peek_request(dev);
-    if (req == NULL) {
-        return;
-    }
-    uint32_t bytes_transfered = disp->bytes_transfered;
-
-    if (req->op) {
-        hd44xxx_writeb(dev, ((char*)req->buffer)[bytes_transfered++]);
-    } else {
-        ((char*)req->buffer)[bytes_transfered++] = hd44xxx_readb(dev);
-    }
-    if (bytes_transfered == req->count) {
-        req->count = bytes_transfered;
-        req->status = 1;
-        proc_unblock_process(waiter_pop(&req->waiter));
-        device_dequeue_request(dev);
-        disp->bytes_transfered = 0;
-    } else {
-        disp->bytes_transfered = bytes_transfered;
-    }
+    return count;
 }
 
 
