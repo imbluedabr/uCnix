@@ -31,8 +31,9 @@ void time_init()
     __disable_irq();
     time_ticks = 0;
     register_interrupt(SysTick_IRQn, NULL, systick_handler);
-    NVIC_SetPriority(SysTick_IRQn, 3);
+	__DSB();
     SysTick_Config(48000);
+    NVIC_SetPriority(SysTick_IRQn, 3);
     __enable_irq();
 }
 
