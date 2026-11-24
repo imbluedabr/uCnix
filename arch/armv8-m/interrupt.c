@@ -1,3 +1,4 @@
+#include "board/mcxa153/MCXA153_COMMON.h"
 #include <kernel/interrupt.h>
 #include <arch/armv8-m/fault.h>
 #include <board/board.h>
@@ -61,14 +62,17 @@ void* get_current_handler_struct() {
 
 int disable_interrupts()
 {
-    int irqstat = __get_PRIMASK();
-    __disable_irq();
+    int irqstat = __get_BASEPRI();
+	__set_BASEPRI((4 << (8U - __NVIC_PRIO_BITS)) & 0xFFU);
+	__DSB();
+	__DMB();
     return irqstat;
 }
 
 void enable_interrupts(int irqstat)
 {
-    __set_PRIMASK(irqstat);
+    __set_BASEPRI(irqstat);
+	__DSB();
 }
 
 
