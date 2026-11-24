@@ -6,4 +6,4 @@
 #define TTY_MAJOR 3
 #define GPIO_MAJOR 4
 #define I2C_MAJOR 5
-
+#define HUB75_MAJOR 6

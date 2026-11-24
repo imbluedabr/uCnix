@@ -21,6 +21,7 @@
 #include <drivers/usart.h>
 #include <drivers/gpio.h>
 #include <drivers/i2c.h>
+#include <drivers/hub75.h>
 #include <lib/kmalloc.h>
 #include <lib/stdlib.h>
 #include <uapi/sys/fcntl.h>
@@ -159,6 +160,9 @@ void kernel_pre_init()
 #endif
 #ifdef I2C_DRIVER
 	i2c_init();
+#endif
+#ifdef HUB75_DRIVER
+	hub75_init();
 #endif
 }
 

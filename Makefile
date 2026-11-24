@@ -93,8 +93,10 @@ DEV_SELECT += drivers/hd44xxx/st7920.c
 $(shell echo "#define HD44XXX_DRIVER_ST7920" >> $(SETTINGS_FILE))
 endif
 
-
-
+ifeq ($(CONFIG_HUB75_DRIVER), y)
+DEV_SELECT += drivers/hub75/hub75.c
+$(shell echo "#define HUB75_DRIVER" >> $(SETTINGS_FILE))
+endif
 
 #source files
 CSRCS = $(FS_SELECT) \
