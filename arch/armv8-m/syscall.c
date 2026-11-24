@@ -18,13 +18,6 @@
 
 typedef void (*syscall_t)(struct exception_frame*);
 
-static inline int check_uptr(void* uptr)
-{
-    if ((uint8_t*) uptr < current_process->program_base) return -EFAULT;
-    if ((uint8_t*) uptr > (current_process->program_base + current_process->program_size)) return -EFAULT;
-    return 0;
-}
-
 static void s_read(struct exception_frame* f)
 {
     f->caller_regs[0] = vfs_read(f->caller_regs[0], (void*) f->caller_regs[1], f->caller_regs[2]);
