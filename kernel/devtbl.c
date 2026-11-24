@@ -2,29 +2,23 @@
 #include <kernel/device.h>
 #include <lib/kprint.h>
 
-void list_devices(int major)
-{
-    struct device_driver* drv = driver_table[major];
-    if (!drv) return;
-
-    struct device* current = drv->instances;
-    for (int i = 0; i < drv->instance_count; i++) {
-        if (!current)  {
-            kerr("dev: %s: device list corrupted\n", drv->name);
-            break;
-        }
-        kinfo("dev: discovered %s%d with devno (%d,%d)\n", drv->name, current->minor, major, current->minor);
-        current = current->next;
-    }
-}
+const char* bus_types[] = {
+	"NONE",
+	"MMIO",
+	"I2C",
+	"SPI",
+	"UART",
+	"GPIO"
+};
 
 void walk_dt(struct bus_device* parent, const dt_node_t* node)
 {
 	if (node->preinit) return;
 
     struct device* dev;
+	const struct mmio_bus_desc* desc = node->desc;
+
     if (!parent) { //the first layer is always an mmio descriptor
-        const struct mmio_bus_desc* desc = node->desc;
         dev = device_probe(desc->major, NULL, desc);
     } else {
         dev = parent->bus_ops->probe(parent, node->desc);
@@ -33,6 +27,10 @@ void walk_dt(struct bus_device* parent, const dt_node_t* node)
 	if (!dev) {
     	kerr("dev: failed to create device\n");
 		return;
+	} else if (parent) {
+		kinfo("dev: %s%d:%s\n", dev->driver->name, dev->minor, bus_types[dev->driver->bus_accept]);
+	} else {
+		kinfo("dev: %s%d:MMIO@0x%x\n", dev->driver->name, dev->minor, desc->base);
 	}
 
     for (const dt_node_t* child = node->child; child; child = child->next) {
@@ -44,10 +42,6 @@ void devtbl_init(const dt_node_t* device_tree)
 {
     for (const dt_node_t* child = device_tree->child; child; child = child->next) {
         walk_dt(NULL, child);
-    }
-
-    for (int i = 0; i < DRIVER_TABLE_LEN; i++) {
-        list_devices(i);
     }
 }
 
