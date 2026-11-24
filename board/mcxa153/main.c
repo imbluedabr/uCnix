@@ -47,9 +47,22 @@ const dt_node_t static_device_tree = {
 	.next = &(dt_node_t) {
 		.preinit = 0,
 		.desc = &(struct mmio_bus_desc) {
+			.base = (uint8_t*) GPIO1,
+			.major = GPIO_MAJOR
+		},
+		.child = &(dt_node_t) {
+			.preinit = 0,
+			.desc = &(struct gpio_bus_desc) {
+				.major = HUB75_MAJOR
+			}
+		},
+	.next = &(dt_node_t) {
+		.preinit = 0,
+		.desc = &(struct mmio_bus_desc) {
 			.base = (uint8_t*) LPI2C0,
 			.major = I2C_MAJOR
-		}
+		},
+	},
 	}
 	}
 	}
