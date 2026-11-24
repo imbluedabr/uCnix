@@ -71,7 +71,38 @@ void system_init()
     GPIO3->PDOR |= (1<<13);
 
     GPIO3->PDDR |= (1<<13);
+	
+	/*
+    // 1. Set Core LDO to 1.1V (Normal Drive) in SPC0 
+	
+    SPC0->ACTIVE_CFG = (SPC0->ACTIVE_CFG & ~SPC_ACTIVE_CFG_CORELDO_VDD_LVL_MASK) 
+                       | SPC_ACTIVE_CFG_CORELDO_VDD_LVL(1U) 
+                       | SPC_ACTIVE_CFG_CORELDO_VDD_DS_MASK;
+    while ((SPC0->SC & SPC_SC_BUSY_MASK) != 0U) {}
 
+    // 2. Set Flash Read Wait States to 2 (required for > 48 MHz)
+    FMU0->FCTRL = (FMU0->FCTRL & ~FMU_FCTRL_RWSC_MASK) | FMU_FCTRL_RWSC(2U);
+
+    // 3. Unlock SYSCON clock registers
+    SYSCON->CLKUNLOCK = 0U;
+
+    // 4. Set FIRC (FRO192M) to 96 MHz (FREQ_SEL = 5)
+    SCG0->FIRCCSR &= ~SCG_FIRCCSR_LK_MASK; // Unlock FIRCCSR if locked
+	*/
+    //SCG0->FIRCCFG = SCG_FIRCCFG_FREQ_SEL(0b101);
+	/*
+    SCG0->FIRCCSR |= SCG_FIRCCSR_FIRCEN_MASK;
+    while ((SCG0->FIRCCSR & SCG_FIRCCSR_FIRCVLD_MASK) == 0U) {}
+
+    // 5. Set AHB/CPU divider to 1 (DIV = 0 means divide by 1)
+    SYSCON->AHBCLKDIV = 0U;
+    // 6. Switch Run Clock Control Register (RCCR) source to FIRC (3)
+    SCG0->RCCR = (SCG0->RCCR & ~SCG_RCCR_SCS_MASK) | SCG_RCCR_SCS(3U);
+    while (((SCG0->CSR & SCG_CSR_SCS_MASK) >> SCG_CSR_SCS_SHIFT) != 3U) {}
+
+    // 7. Re-lock SYSCON clock registers
+    SYSCON->CLKUNLOCK = 1U;
+	*/
 }
 
 void system_blink()
